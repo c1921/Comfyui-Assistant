@@ -7,6 +7,7 @@ import ProgressCard from './components/ProgressCard.vue'
 import LogCard from './components/LogCard.vue'
 import OutputCard from './components/OutputCard.vue'
 import AlbumCard from './components/AlbumCard.vue'
+import MainTabs from './components/MainTabs.vue'
 
 onMounted(() => {
   setTimeout(() => window.HSStaticMethods.autoInit(), 100)
@@ -514,40 +515,67 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="flex min-h-screen flex-col">
+    <div class="flex-1">
+      <div id="tabs-main-workflow" role="tabpanel" aria-labelledby="tabs-main-workflow-item">
+        <div class="space-y-4">
+          <WorkflowCard
+            v-model:workflow-json="workflowJson"
+            :parse-info="parseInfo"
+            @parse="onParse"
+            @clear="onClear"
+          />
 
-    <ConnectionCard
-      :backend-origin="backendLabel"
-      :ws-state="wsState"
-      @connect="connectWs"
-      @disconnect="disconnectWs"
-    />
+          <ParamsCard v-model:fields="paramFields" @run="onRun" @stop="onStop" />
 
-    <WorkflowCard
-      v-model:workflow-json="workflowJson"
-      :parse-info="parseInfo"
-      @parse="onParse"
-      @clear="onClear"
-    />
+          <ProgressCard
+            :value="progressValue"
+            :max="progressMax"
+            :node="progressNode"
+            :queue-remaining="progressQueueRemaining"
+            :status-text="progressStatus"
+          />
 
-    <ParamsCard v-model:fields="paramFields" @run="onRun" @stop="onStop" />
+          <LogCard :log-text="logText" />
+        </div>
+      </div>
 
-    <ProgressCard
-      :value="progressValue"
-      :max="progressMax"
-      :node="progressNode"
-      :queue-remaining="progressQueueRemaining"
-      :status-text="progressStatus"
-    />
+      <div
+        id="tabs-main-images"
+        class="hidden"
+        role="tabpanel"
+        aria-labelledby="tabs-main-images-item"
+      >
+        <div class="space-y-4">
+          <OutputCard :images="images" />
+          <AlbumCard
+            :items="albumImages"
+            :error-message="albumError"
+            :sort-order="albumSortOrder"
+            @update:sort-order="albumSortOrder = $event"
+            @refresh="fetchAlbum"
+          />
+        </div>
+      </div>
 
-    <LogCard :log-text="logText" />
-    <OutputCard :images="images" />
-    <AlbumCard
-      :items="albumImages"
-      :error-message="albumError"
-      :sort-order="albumSortOrder"
-      @update:sort-order="albumSortOrder = $event"
-      @refresh="fetchAlbum"
-    />
+      <div
+        id="tabs-main-settings"
+        class="hidden"
+        role="tabpanel"
+        aria-labelledby="tabs-main-settings-item"
+      >
+        <div class="space-y-4">
+          <ConnectionCard
+            :backend-origin="backendLabel"
+            :ws-state="wsState"
+            @connect="connectWs"
+            @disconnect="disconnectWs"
+          />
+        </div>
+      </div>
+    </div>
+    <div class="sticky bottom-0 bg-base-100/95 backdrop-blur supports-backdrop-filter:bg-base-100/80">
+      <MainTabs />
+    </div>
   </div>
 </template>
