@@ -99,6 +99,7 @@ const progressQueueRemaining = ref<number | null>(null)
 const progressStatus = ref('等待进度...')
 const isRunning = ref(false)
 const autoRandomSeed = ref(true)
+const isOutputDone = ref(false)
 
 const backendOrigin = () => {
   const host = pcIp.value.trim()
@@ -192,6 +193,7 @@ const connectWs = () => {
         if (typeof q === 'number') {
           progressQueueRemaining.value = q
           log(`队列剩余：${q}`)
+          if (isOutputDone.value && q === 0) isRunning.value = false
         }
         return
       }
@@ -211,7 +213,7 @@ const connectWs = () => {
       if (msg.type === 'executed' || msg.type === 'execution_success') {
         const pid = msg.data?.prompt_id || msg.prompt_id || lastPromptId.value
         progressStatus.value = '执行完成'
-        isRunning.value = false
+        isOutputDone.value = true
         log(`执行完成（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
         await tryFetchHistoryAndShow(pid)
         return
@@ -223,7 +225,7 @@ const connectWs = () => {
         if (node === null) {
           progressNode.value = null
           progressStatus.value = '执行结束'
-          isRunning.value = false
+          isOutputDone.value = true
           log(`执行结束信号（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
           await tryFetchHistoryAndShow(pid)
         } else {
@@ -448,12 +450,14 @@ const onClear = () => {
   progressQueueRemaining.value = null
   progressStatus.value = '等待进度...'
   isRunning.value = false
+  isOutputDone.value = false
   log('已清空。')
 }
 
 const onRun = async () => {
   try {
     isRunning.value = true
+    isOutputDone.value = false
     randomizeSeedFields()
     images.value = []
     shownFiles.clear()
@@ -490,6 +494,7 @@ const onRun = async () => {
     log(`运行失败：${(err as Error)?.message || String(err)}`)
     alert('运行失败，查看日志区获取详情。常见原因：后端代理/CORS/混合内容/防火墙。')
     isRunning.value = false
+    isOutputDone.value = false
   }
 }
 
@@ -498,6 +503,7 @@ const onStop = async () => {
     await interrupt()
     log('已发送 Interrupt。')
     isRunning.value = false
+    isOutputDone.value = false
   } catch (err) {
     log(`Interrupt 失败：${(err as Error)?.message || String(err)}`)
   }
