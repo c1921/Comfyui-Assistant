@@ -6,6 +6,7 @@ import ParamsCard from './components/ParamsCard.vue'
 import ProgressCard from './components/ProgressCard.vue'
 import LogCard from './components/LogCard.vue'
 import OutputCard from './components/OutputCard.vue'
+import AlbumCard from './components/AlbumCard.vue'
 
 onMounted(() => {
   setTimeout(() => window.HSStaticMethods.autoInit(), 100)
@@ -39,6 +40,11 @@ type ImageFile = {
 type ImageItem = {
   src: string
   alt: string
+}
+
+type AlbumItem = {
+  name: string
+  url: string
 }
 
 function makeUUID(): string {
@@ -80,6 +86,9 @@ const logLines = ref<string[]>([])
 const logText = computed(() => logLines.value.join('\n'))
 
 const images = ref<ImageItem[]>([])
+const albumImages = ref<AlbumItem[]>([])
+const albumError = ref('')
+const albumSortOrder = ref<'asc' | 'desc'>('desc')
 
 const progressValue = ref<number | null>(null)
 const progressMax = ref<number | null>(null)
@@ -280,6 +289,34 @@ const showImageFile = async (file: ImageFile) => {
   log(`已展示图片：${file.filename}`)
 }
 
+const normalizeAlbumItems = (items: AlbumItem[]) =>
+  items.map((item) => ({
+    name: item.name,
+    url: item.url.startsWith('http') ? item.url : `${backendOrigin()}${item.url}`,
+  }))
+
+const fetchAlbum = async () => {
+  albumError.value = ''
+  try {
+    const resp = await fetch(`${baseHttp()}/album/list?order=${encodeURIComponent(albumSortOrder.value)}`)
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '')
+      albumError.value = `相册加载失败：HTTP ${resp.status} ${text}`.trim()
+      albumImages.value = []
+      return
+    }
+    const data = await resp.json()
+    if (Array.isArray(data)) {
+      albumImages.value = normalizeAlbumItems(data)
+    } else {
+      albumImages.value = []
+    }
+  } catch (err) {
+    albumError.value = `相册加载失败：${(err as Error)?.message || String(err)}`
+    albumImages.value = []
+  }
+}
+
 const tryFetchHistoryAndShow = async (promptId?: string | null) => {
   if (!promptId) return
 
@@ -332,6 +369,7 @@ const tryFetchHistoryAndShow = async (promptId?: string | null) => {
   for (const f of files) {
     await showImageFile(f)
   }
+  await fetchAlbum()
 }
 
 const cloneWorkflow = (value: WorkflowMap) => JSON.parse(JSON.stringify(value)) as WorkflowMap
@@ -455,6 +493,7 @@ const fetchBackendConfig = async () => {
 
 onMounted(async () => {
   await fetchBackendConfig()
+  await fetchAlbum()
   connectWs()
 })
 
@@ -503,5 +542,12 @@ onBeforeUnmount(() => {
 
     <LogCard :log-text="logText" />
     <OutputCard :images="images" />
+    <AlbumCard
+      :items="albumImages"
+      :error-message="albumError"
+      :sort-order="albumSortOrder"
+      @update:sort-order="albumSortOrder = $event"
+      @refresh="fetchAlbum"
+    />
   </div>
 </template>

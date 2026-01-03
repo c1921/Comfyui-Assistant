@@ -1,4 +1,5 @@
 {
   "pcIp": "",
-  "pcPort": "8000"
+  "pcPort": "8000",
+  "albumPath": "D:\\Path\\To\\ComfyUI\\output"
 }
