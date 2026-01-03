@@ -51,7 +51,7 @@ const isSeedField = (inputKey: string) => inputKey.trim().toLowerCase() === 'see
 
 <template>
   <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
-    <h3 class="mb-2 text-base font-semibold">2) 参数设置（会写回 workflow）</h3>
+    <h3 class="mb-2 text-base font-semibold">参数设置</h3>
 
     <div v-if="props.fields.length === 0" class="text-sm text-base-content/70">
       未发现可编辑字段。提示：只有 string/number/boolean 会被展示，连线引用会被跳过。

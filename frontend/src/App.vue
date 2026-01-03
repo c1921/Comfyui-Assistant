@@ -548,6 +548,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex min-h-screen flex-col">
     <div class="flex-1">
+      <ProgressCard
+        :value="progressValue"
+        :max="progressMax"
+        :node="progressNode"
+        :queue-remaining="progressQueueRemaining"
+        :status-text="progressStatus"
+      />
       <div id="tabs-main-workflow" role="tabpanel" aria-labelledby="tabs-main-workflow-item">
         <div class="space-y-4">
           <WorkflowCard
@@ -563,14 +570,6 @@ onBeforeUnmount(() => {
             @update:auto-random-seed="autoRandomSeed = $event"
             @run="onRun"
             @stop="onStop"
-          />
-
-          <ProgressCard
-            :value="progressValue"
-            :max="progressMax"
-            :node="progressNode"
-            :queue-remaining="progressQueueRemaining"
-            :status-text="progressStatus"
           />
 
           <LogCard :log-text="logText" />

@@ -25,7 +25,7 @@ const onSortChange = (ev: Event) => {
 <template>
   <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <h3 class="text-base font-semibold">6) 相册</h3>
+      <h3 class="text-base font-semibold">相册</h3>
       <div class="flex items-center gap-2">
         <select class="select select-xs select-bordered" :value="props.sortOrder" @change="onSortChange">
           <option value="desc">倒序</option>

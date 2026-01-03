@@ -26,7 +26,7 @@ const onFileChange = (event: Event) => {
 
 <template>
   <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
-    <h3 class="mb-2 text-base font-semibold">1) 粘贴或上传你的完整 Workflow JSON</h3>
+    <h3 class="mb-2 text-base font-semibold">粘贴或上传 Workflow JSON</h3>
     <textarea
       :value="props.workflowJson"
       class="textarea textarea-bordered textarea-sm w-full min-h-40"
