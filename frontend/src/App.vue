@@ -8,6 +8,7 @@ import LogCard from './components/LogCard.vue'
 import OutputCard from './components/OutputCard.vue'
 import AlbumCard from './components/AlbumCard.vue'
 import MainTabs from './components/MainTabs.vue'
+import FloatingRunButton from './components/FloatingRunButton.vue'
 
 onMounted(() => {
   setTimeout(() => window.HSStaticMethods.autoInit(), 100)
@@ -96,6 +97,7 @@ const progressMax = ref<number | null>(null)
 const progressNode = ref<string | null>(null)
 const progressQueueRemaining = ref<number | null>(null)
 const progressStatus = ref('等待进度...')
+const isRunning = ref(false)
 
 const backendOrigin = () => {
   const host = pcIp.value.trim()
@@ -208,6 +210,7 @@ const connectWs = () => {
       if (msg.type === 'executed' || msg.type === 'execution_success') {
         const pid = msg.data?.prompt_id || msg.prompt_id || lastPromptId.value
         progressStatus.value = '执行完成'
+        isRunning.value = false
         log(`执行完成（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
         await tryFetchHistoryAndShow(pid)
         return
@@ -219,6 +222,7 @@ const connectWs = () => {
         if (node === null) {
           progressNode.value = null
           progressStatus.value = '执行结束'
+          isRunning.value = false
           log(`执行结束信号（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
           await tryFetchHistoryAndShow(pid)
         } else {
@@ -427,11 +431,13 @@ const onClear = () => {
   progressNode.value = null
   progressQueueRemaining.value = null
   progressStatus.value = '等待进度...'
+  isRunning.value = false
   log('已清空。')
 }
 
 const onRun = async () => {
   try {
+    isRunning.value = true
     images.value = []
     shownFiles.clear()
     progressValue.value = null
@@ -466,6 +472,7 @@ const onRun = async () => {
   } catch (err) {
     log(`运行失败：${(err as Error)?.message || String(err)}`)
     alert('运行失败，查看日志区获取详情。常见原因：后端代理/CORS/混合内容/防火墙。')
+    isRunning.value = false
   }
 }
 
@@ -473,6 +480,7 @@ const onStop = async () => {
   try {
     await interrupt()
     log('已发送 Interrupt。')
+    isRunning.value = false
   } catch (err) {
     log(`Interrupt 失败：${(err as Error)?.message || String(err)}`)
   }
@@ -574,6 +582,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <FloatingRunButton :is-running="isRunning" @run="onRun" />
     <div class="sticky bottom-0 bg-base-100/95 backdrop-blur supports-backdrop-filter:bg-base-100/80">
       <MainTabs />
     </div>
