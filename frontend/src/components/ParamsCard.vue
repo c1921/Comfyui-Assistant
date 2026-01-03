@@ -1,120 +1,99 @@
 <script setup lang="ts">
-interface SelectOption {
-  value: string
-  label: string
+import { computed } from 'vue'
+
+type ParamField = {
+  id: string
+  nodeId: string
+  nodeLabel: string
+  inputKey: string
+  value: string | number | boolean
+  inputType: 'string' | 'number' | 'boolean'
 }
 
-const props = defineProps<{
-  posPrompt: string
-  negPrompt: string
-  seed: number
-  steps: number
-  cfg: number
-  width: number
-  height: number
-  batch: number
-}>()
+const props = defineProps<{ fields: ParamField[] }>()
 
 const emit = defineEmits<{
-  (e: 'update:posPrompt', value: string): void
-  (e: 'update:negPrompt', value: string): void
-  (e: 'update:seed', value: number): void
-  (e: 'update:steps', value: number): void
-  (e: 'update:cfg', value: number): void
-  (e: 'update:width', value: number): void
-  (e: 'update:height', value: number): void
-  (e: 'update:batch', value: number): void
+  (e: 'update:fields', value: ParamField[]): void
   (e: 'run'): void
   (e: 'stop'): void
 }>()
+
+const groups = computed(() => {
+  const map = new Map<string, { key: string; label: string; items: ParamField[] }>()
+  for (const field of props.fields) {
+    const key = `${field.nodeLabel} (${field.nodeId})`
+    const existing = map.get(key)
+    if (existing) {
+      existing.items.push(field)
+    } else {
+      map.set(key, { key, label: key, items: [field] })
+    }
+  }
+  return [...map.values()]
+})
+
+const updateFieldValue = (id: string, value: string | number | boolean) => {
+  const next = props.fields.map((field) => (field.id === id ? { ...field, value } : field))
+  emit('update:fields', next)
+}
+
+const asTextarea = (value: unknown) => {
+  if (typeof value !== 'string') return false
+  return value.length > 80 || value.includes('\n')
+}
 </script>
 
 <template>
   <div class="card">
     <h3 style="margin: 0 0 8px 0">2) 参数设置（会写回 workflow）</h3>
 
-    <div class="row">
-      <label>
-        正向 Prompt：
-        <input
-          :value="props.posPrompt"
-          style="width: 520px"
-          placeholder="例如：a cinematic portrait of..."
-          @input="emit('update:posPrompt', ($event.target as HTMLInputElement).value)"
-        />
-      </label>
+    <div v-if="props.fields.length === 0" class="small">
+      未发现可编辑字段。提示：只有 string/number/boolean 会被展示，连线引用会被跳过。
     </div>
-    <div class="row" style="margin-top: 8px">
-      <label>
-        负向 Prompt：
-        <input
-          :value="props.negPrompt"
-          style="width: 520px"
-          placeholder="例如：lowres, blurry..."
-          @input="emit('update:negPrompt', ($event.target as HTMLInputElement).value)"
-        />
-      </label>
-    </div>
-
-    <div class="row" style="margin-top: 10px">
-      <label>
-        seed：
-        <input
-          type="number"
-          :value="props.seed"
-          style="width: 130px"
-          @input="emit('update:seed', Number(($event.target as HTMLInputElement).value))"
-        />
-      </label>
-      <label>
-        steps：
-        <input
-          type="number"
-          :value="props.steps"
-          style="width: 110px"
-          @input="emit('update:steps', Number(($event.target as HTMLInputElement).value))"
-        />
-      </label>
-      <label>
-        cfg：
-        <input
-          type="number"
-          step="0.5"
-          :value="props.cfg"
-          style="width: 90px"
-          @input="emit('update:cfg', Number(($event.target as HTMLInputElement).value))"
-        />
-      </label>
-    </div>
-
-    <div class="row" style="margin-top: 10px">
-      <label>
-        width：
-        <input
-          type="number"
-          :value="props.width"
-          style="width: 110px"
-          @input="emit('update:width', Number(($event.target as HTMLInputElement).value))"
-        />
-      </label>
-      <label>
-        height：
-        <input
-          type="number"
-          :value="props.height"
-          style="width: 110px"
-          @input="emit('update:height', Number(($event.target as HTMLInputElement).value))"
-        />
-      </label>
-      <label>
-        batch：
-        <input
-          type="number"
-          :value="props.batch"
-          style="width: 90px"
-          @input="emit('update:batch', Number(($event.target as HTMLInputElement).value))"
-        />
-      </label>
+    <div v-else>
+      <div v-for="group in groups" :key="group.key" style="margin-top: 10px">
+        <div class="small" style="margin-bottom: 6px">节点：{{ group.label }}</div>
+        <div
+          v-for="field in group.items"
+          :key="field.id"
+          class="row"
+          style="margin-bottom: 6px"
+        >
+          <label>
+            {{ field.inputKey }}：
+            <input
+              v-if="field.inputType === 'number'"
+              type="number"
+              :value="field.value"
+              style="width: 180px"
+              @input="
+                updateFieldValue(field.id, Number(($event.target as HTMLInputElement).value))
+              "
+            />
+            <input
+              v-else-if="field.inputType === 'boolean'"
+              type="checkbox"
+              :checked="Boolean(field.value)"
+              @change="
+                updateFieldValue(field.id, ($event.target as HTMLInputElement).checked)
+              "
+            />
+            <textarea
+              v-else-if="asTextarea(field.value)"
+              :value="String(field.value)"
+              style="width: 520px"
+              rows="3"
+              @input="updateFieldValue(field.id, ($event.target as HTMLTextAreaElement).value)"
+            ></textarea>
+            <input
+              v-else
+              :value="String(field.value)"
+              style="width: 520px"
+              @input="updateFieldValue(field.id, ($event.target as HTMLInputElement).value)"
+            />
+          </label>
+        </div>
+      </div>
     </div>
 
     <div class="row" style="margin-top: 12px">

@@ -14,6 +14,17 @@ interface WorkflowNode {
 
 type WorkflowMap = Record<string, WorkflowNode>
 
+type EditableValue = string | number | boolean
+
+type ParamField = {
+  id: string
+  nodeId: string
+  nodeLabel: string
+  inputKey: string
+  value: EditableValue
+  inputType: 'string' | 'number' | 'boolean'
+}
+
 type ImageFile = {
   filename: string
   subfolder?: string
@@ -56,18 +67,7 @@ const wsState = ref('WS: 未连接')
 const workflowJson = ref('')
 const parseInfo = ref('')
 
-const posPrompt = ref('1girl')
-const negPrompt = ref('')
-
-const posNode = ref('')
-const negNode = ref('')
-
-const seed = ref(0)
-const steps = ref(8)
-const cfg = ref(1)
-const width = ref(1024)
-const height = ref(1024)
-const batch = ref(1)
+const paramFields = ref<ParamField[]>([])
 
 const logLines = ref<string[]>([])
 const logText = computed(() => logLines.value.join('\n'))
@@ -101,48 +101,29 @@ const safeJsonParse = (raw: string) => {
   }
 }
 
-const findNodesByClass = (wf: WorkflowMap, classType: string) => {
-  const out: { id: string; node: WorkflowNode }[] = []
-  for (const [id, node] of Object.entries(wf || {})) {
-    if (node && node.class_type === classType) out.push({ id, node })
-  }
-  return out
-}
+const isEditableValue = (value: unknown): value is EditableValue =>
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 
-const findSizeCandidates = (wf: WorkflowMap) => {
-  const candidates: { id: string; node: WorkflowNode }[] = []
-  const classSet = new Set([
-    'EmptyLatentImage',
-    'EmptyLatentImage (WAS)',
-    'LatentUpscale',
-    'ImageResize',
-    'SDXLAspectRatio',
-  ])
-  for (const [id, node] of Object.entries(wf || {})) {
-    if (!node) continue
-    if (classSet.has(node.class_type || '')) candidates.push({ id, node })
-    const ins = node.inputs || {}
-    if (typeof ins.width === 'number' && typeof ins.height === 'number') {
-      candidates.push({ id, node })
+const buildEditableParams = (wf: WorkflowMap) => {
+  const fields: ParamField[] = []
+  for (const [nodeId, node] of Object.entries(wf || {})) {
+    if (!node?.inputs) continue
+    const nodeLabel = node._meta?.title || node.class_type || nodeId
+    for (const [inputKey, value] of Object.entries(node.inputs)) {
+      if (!isEditableValue(value)) continue
+      const inputType =
+        typeof value === 'string' ? 'string' : typeof value === 'number' ? 'number' : 'boolean'
+      fields.push({
+        id: `${nodeId}.${inputKey}`,
+        nodeId,
+        nodeLabel,
+        inputKey,
+        value,
+        inputType,
+      })
     }
   }
-  const seen = new Set<string>()
-  return candidates.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)))
-}
-
-const getLinkedNodeId = (value: unknown) => {
-  if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
-  if (typeof value === 'string') return value
-  return ''
-}
-
-const findPromptNodesFromSampler = (wf: WorkflowMap, samplerId?: string) => {
-  if (!samplerId) return { posId: '', negId: '' }
-  const node = wf[samplerId]
-  const ins = node?.inputs || {}
-  const posId = getLinkedNodeId(ins.positive)
-  const negId = getLinkedNodeId(ins.negative)
-  return { posId, negId }
+  return fields
 }
 
 const ensureWsConnected = () => {
@@ -331,36 +312,18 @@ const cloneWorkflow = (value: WorkflowMap) => JSON.parse(JSON.stringify(value)) 
 const buildWorkflowWithParams = () => {
   if (!workflow.value) throw new Error('请先解析并加载 workflow')
   const wf = cloneWorkflow(workflow.value)
-
-  const posId = posNode.value
-  const negId = negNode.value
-  const ksId = findNodesByClass(wf, 'KSampler')[0]?.id || ''
-  const szId = findSizeCandidates(wf)[0]?.id || ''
-
-  if (posId && wf[posId]?.inputs) wf[posId].inputs.text = posPrompt.value ?? ''
-  if (negId && wf[negId]?.inputs) wf[negId].inputs.text = negPrompt.value ?? ''
-
-  const seedValue = Number(seed.value)
-  const stepsValue = Number(steps.value)
-  const cfgValue = Number(cfg.value)
-
-  if (ksId && wf[ksId]?.inputs) {
-    if (!Number.isNaN(seedValue)) wf[ksId].inputs.seed = seedValue
-    if (!Number.isNaN(stepsValue)) wf[ksId].inputs.steps = stepsValue
-    if (!Number.isNaN(cfgValue)) wf[ksId].inputs.cfg = cfgValue
+  for (const field of paramFields.value) {
+    const node = wf[field.nodeId]
+    if (!node?.inputs) continue
+    if (field.inputType === 'number') {
+      const next = Number(field.value)
+      if (!Number.isNaN(next)) node.inputs[field.inputKey] = next
+    } else if (field.inputType === 'boolean') {
+      node.inputs[field.inputKey] = Boolean(field.value)
+    } else {
+      node.inputs[field.inputKey] = String(field.value)
+    }
   }
-
-  const w = Number(width.value)
-  const h = Number(height.value)
-  const b = Number(batch.value)
-
-  if (szId && wf[szId]?.inputs) {
-    if (!Number.isNaN(w) && 'width' in wf[szId].inputs) wf[szId].inputs.width = w
-    if (!Number.isNaN(h) && 'height' in wf[szId].inputs) wf[szId].inputs.height = h
-    if (!Number.isNaN(b) && 'batch_size' in wf[szId].inputs) wf[szId].inputs.batch_size = b
-    if (!Number.isNaN(b) && 'batch' in wf[szId].inputs) wf[szId].inputs.batch = b
-  }
-
   return wf
 }
 
@@ -372,19 +335,9 @@ const onParse = () => {
     return
   }
   workflow.value = obj as WorkflowMap
+  paramFields.value = buildEditableParams(workflow.value)
 
-  const clips = findNodesByClass(obj, 'CLIPTextEncode')
-  const ksamplers = findNodesByClass(obj, 'KSampler')
-  const samplerId = ksamplers[0]?.id || ''
-  const { posId, negId } = findPromptNodesFromSampler(obj, samplerId)
-  if (posId) posNode.value = posId
-  if (negId) negNode.value = negId
-  if (!posNode.value && clips[0]) posNode.value = clips[0].id
-  if (!negNode.value && clips[1]) negNode.value = clips[1].id
-
-  parseInfo.value =
-    `解析成功：CLIPTextEncode=${clips.length}，KSampler=${ksamplers.length}。` +
-    '（如选项为空，说明你的图里对应节点类型不同，需要我按你的 workflow 调整识别规则。）'
+  parseInfo.value = `解析成功：发现 ${paramFields.value.length} 个可编辑字段。`
 
   log('Workflow 已加载并解析节点。')
 }
@@ -393,6 +346,7 @@ const onClear = () => {
   workflowJson.value = ''
   parseInfo.value = ''
   workflow.value = null
+  paramFields.value = []
   images.value = []
   shownFiles.clear()
   log('已清空。')
@@ -471,14 +425,7 @@ onBeforeUnmount(() => {
     />
 
     <ParamsCard
-      v-model:pos-prompt="posPrompt"
-      v-model:neg-prompt="negPrompt"
-      v-model:seed="seed"
-      v-model:steps="steps"
-      v-model:cfg="cfg"
-      v-model:width="width"
-      v-model:height="height"
-      v-model:batch="batch"
+      v-model:fields="paramFields"
       @run="onRun"
       @stop="onStop"
     />
