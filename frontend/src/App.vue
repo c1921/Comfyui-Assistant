@@ -14,8 +14,6 @@ interface WorkflowNode {
 
 type WorkflowMap = Record<string, WorkflowNode>
 
-type SelectOption = { value: string; label: string }
-
 type ImageFile = {
   filename: string
   subfolder?: string
@@ -63,8 +61,6 @@ const negPrompt = ref('')
 
 const posNode = ref('')
 const negNode = ref('')
-const ksamplerNode = ref('')
-const sizeNode = ref('')
 
 const seed = ref(0)
 const steps = ref(8)
@@ -72,11 +68,6 @@ const cfg = ref(1)
 const width = ref(1024)
 const height = ref(1024)
 const batch = ref(1)
-
-const posOptions = ref<SelectOption[]>([])
-const negOptions = ref<SelectOption[]>([])
-const ksamplerOptions = ref<SelectOption[]>([])
-const sizeOptions = ref<SelectOption[]>([])
 
 const logLines = ref<string[]>([])
 const logText = computed(() => logLines.value.join('\n'))
@@ -110,12 +101,6 @@ const safeJsonParse = (raw: string) => {
   }
 }
 
-const nodeLabel = (id: string, node?: WorkflowNode) => {
-  const t = node?.class_type || 'Unknown'
-  const title = node?._meta?.title ? ` — ${node._meta.title}` : ''
-  return `${id} (${t}${title})`
-}
-
 const findNodesByClass = (wf: WorkflowMap, classType: string) => {
   const out: { id: string; node: WorkflowNode }[] = []
   for (const [id, node] of Object.entries(wf || {})) {
@@ -143,6 +128,21 @@ const findSizeCandidates = (wf: WorkflowMap) => {
   }
   const seen = new Set<string>()
   return candidates.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)))
+}
+
+const getLinkedNodeId = (value: unknown) => {
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+  if (typeof value === 'string') return value
+  return ''
+}
+
+const findPromptNodesFromSampler = (wf: WorkflowMap, samplerId?: string) => {
+  if (!samplerId) return { posId: '', negId: '' }
+  const node = wf[samplerId]
+  const ins = node?.inputs || {}
+  const posId = getLinkedNodeId(ins.positive)
+  const negId = getLinkedNodeId(ins.negative)
+  return { posId, negId }
 }
 
 const ensureWsConnected = () => {
@@ -334,8 +334,8 @@ const buildWorkflowWithParams = () => {
 
   const posId = posNode.value
   const negId = negNode.value
-  const ksId = ksamplerNode.value
-  const szId = sizeNode.value
+  const ksId = findNodesByClass(wf, 'KSampler')[0]?.id || ''
+  const szId = findSizeCandidates(wf)[0]?.id || ''
 
   if (posId && wf[posId]?.inputs) wf[posId].inputs.text = posPrompt.value ?? ''
   if (negId && wf[negId]?.inputs) wf[negId].inputs.text = negPrompt.value ?? ''
@@ -375,20 +375,15 @@ const onParse = () => {
 
   const clips = findNodesByClass(obj, 'CLIPTextEncode')
   const ksamplers = findNodesByClass(obj, 'KSampler')
-  const sizes = findSizeCandidates(obj)
-
-  posOptions.value = clips.map((x) => ({ value: x.id, label: nodeLabel(x.id, x.node) }))
-  negOptions.value = clips.map((x) => ({ value: x.id, label: nodeLabel(x.id, x.node) }))
-  ksamplerOptions.value = ksamplers.map((x) => ({ value: x.id, label: nodeLabel(x.id, x.node) }))
-  sizeOptions.value = sizes.map((x) => ({ value: x.id, label: nodeLabel(x.id, x.node) }))
-
-  if (clips[0]) posNode.value = clips[0].id
-  if (clips[1]) negNode.value = clips[1].id
-  if (ksamplers[0]) ksamplerNode.value = ksamplers[0].id
-  if (sizes[0]) sizeNode.value = sizes[0].id
+  const samplerId = ksamplers[0]?.id || ''
+  const { posId, negId } = findPromptNodesFromSampler(obj, samplerId)
+  if (posId) posNode.value = posId
+  if (negId) negNode.value = negId
+  if (!posNode.value && clips[0]) posNode.value = clips[0].id
+  if (!negNode.value && clips[1]) negNode.value = clips[1].id
 
   parseInfo.value =
-    `解析成功：CLIPTextEncode=${clips.length}，KSampler=${ksamplers.length}，尺寸候选=${sizes.length}。` +
+    `解析成功：CLIPTextEncode=${clips.length}，KSampler=${ksamplers.length}。` +
     '（如选项为空，说明你的图里对应节点类型不同，需要我按你的 workflow 调整识别规则。）'
 
   log('Workflow 已加载并解析节点。')
@@ -478,20 +473,12 @@ onBeforeUnmount(() => {
     <ParamsCard
       v-model:pos-prompt="posPrompt"
       v-model:neg-prompt="negPrompt"
-      v-model:pos-node="posNode"
-      v-model:neg-node="negNode"
-      v-model:ksampler-node="ksamplerNode"
-      v-model:size-node="sizeNode"
       v-model:seed="seed"
       v-model:steps="steps"
       v-model:cfg="cfg"
       v-model:width="width"
       v-model:height="height"
       v-model:batch="batch"
-      :pos-options="posOptions"
-      :neg-options="negOptions"
-      :ksampler-options="ksamplerOptions"
-      :size-options="sizeOptions"
       @run="onRun"
       @stop="onStop"
     />

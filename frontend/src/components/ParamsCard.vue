@@ -7,29 +7,17 @@ interface SelectOption {
 const props = defineProps<{
   posPrompt: string
   negPrompt: string
-  posNode: string
-  negNode: string
-  ksamplerNode: string
-  sizeNode: string
   seed: number
   steps: number
   cfg: number
   width: number
   height: number
   batch: number
-  posOptions: SelectOption[]
-  negOptions: SelectOption[]
-  ksamplerOptions: SelectOption[]
-  sizeOptions: SelectOption[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update:posPrompt', value: string): void
   (e: 'update:negPrompt', value: string): void
-  (e: 'update:posNode', value: string): void
-  (e: 'update:negNode', value: string): void
-  (e: 'update:ksamplerNode', value: string): void
-  (e: 'update:sizeNode', value: string): void
   (e: 'update:seed', value: number): void
   (e: 'update:steps', value: number): void
   (e: 'update:cfg', value: number): void
@@ -70,42 +58,6 @@ const emit = defineEmits<{
 
     <div class="row" style="margin-top: 10px">
       <label>
-        正向节点（CLIPTextEncode）：
-        <select
-          :value="props.posNode"
-          @change="emit('update:posNode', ($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="opt in props.posOptions" :key="opt.value" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
-      </label>
-      <label>
-        负向节点（CLIPTextEncode）：
-        <select
-          :value="props.negNode"
-          @change="emit('update:negNode', ($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="opt in props.negOptions" :key="opt.value" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
-      </label>
-    </div>
-
-    <div class="row" style="margin-top: 10px">
-      <label>
-        KSampler 节点：
-        <select
-          :value="props.ksamplerNode"
-          @change="emit('update:ksamplerNode', ($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="opt in props.ksamplerOptions" :key="opt.value" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
-      </label>
-      <label>
         seed：
         <input
           type="number"
@@ -136,17 +88,6 @@ const emit = defineEmits<{
     </div>
 
     <div class="row" style="margin-top: 10px">
-      <label>
-        尺寸节点（EmptyLatentImage / Latent）：
-        <select
-          :value="props.sizeNode"
-          @change="emit('update:sizeNode', ($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="opt in props.sizeOptions" :key="opt.value" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
-      </label>
       <label>
         width：
         <input
