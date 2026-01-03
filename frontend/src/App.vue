@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ConnectionCard from './components/ConnectionCard.vue'
 import WorkflowCard from './components/WorkflowCard.vue'
 import ParamsCard from './components/ParamsCard.vue'
+import ProgressCard from './components/ProgressCard.vue'
 import LogCard from './components/LogCard.vue'
 import OutputCard from './components/OutputCard.vue'
 
@@ -79,6 +80,12 @@ const logLines = ref<string[]>([])
 const logText = computed(() => logLines.value.join('\n'))
 
 const images = ref<ImageItem[]>([])
+
+const progressValue = ref<number | null>(null)
+const progressMax = ref<number | null>(null)
+const progressNode = ref<string | null>(null)
+const progressQueueRemaining = ref<number | null>(null)
+const progressStatus = ref('等待进度...')
 
 const backendOrigin = () => {
   const host = pcIp.value.trim()
@@ -169,19 +176,28 @@ const connectWs = () => {
 
       if (msg.type === 'status') {
         const q = msg.data?.status?.exec_info?.queue_remaining
-        if (typeof q === 'number') log(`队列剩余：${q}`)
+        if (typeof q === 'number') {
+          progressQueueRemaining.value = q
+          log(`队列剩余：${q}`)
+        }
         return
       }
 
       if (msg.type === 'progress') {
         const v = msg.data?.value
         const m = msg.data?.max
-        if (typeof v === 'number' && typeof m === 'number') log(`进度：${v}/${m}`)
+        if (typeof v === 'number' && typeof m === 'number') {
+          progressValue.value = v
+          progressMax.value = m
+          progressStatus.value = `运行中：${v}/${m}`
+          log(`进度：${v}/${m}`)
+        }
         return
       }
 
       if (msg.type === 'executed' || msg.type === 'execution_success') {
         const pid = msg.data?.prompt_id || msg.prompt_id || lastPromptId.value
+        progressStatus.value = '执行完成'
         log(`执行完成（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
         await tryFetchHistoryAndShow(pid)
         return
@@ -191,9 +207,13 @@ const connectWs = () => {
         const node = msg.data?.node
         const pid = msg.data?.prompt_id || lastPromptId.value
         if (node === null) {
+          progressNode.value = null
+          progressStatus.value = '执行结束'
           log(`执行结束信号（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
           await tryFetchHistoryAndShow(pid)
         } else {
+          progressNode.value = String(node)
+          progressStatus.value = `正在执行节点：${node}`
           log(`正在执行节点：${node}`)
         }
         return
@@ -363,6 +383,11 @@ const onClear = () => {
   images.value = []
   shownFiles.clear()
   lastParsedRaw.value = ''
+  progressValue.value = null
+  progressMax.value = null
+  progressNode.value = null
+  progressQueueRemaining.value = null
+  progressStatus.value = '等待进度...'
   log('已清空。')
 }
 
@@ -370,6 +395,11 @@ const onRun = async () => {
   try {
     images.value = []
     shownFiles.clear()
+    progressValue.value = null
+    progressMax.value = null
+    progressNode.value = null
+    progressQueueRemaining.value = null
+    progressStatus.value = '已提交，等待进度...'
 
     if (!workflow.value) {
       alert('请先粘贴并解析 workflow JSON')
@@ -446,10 +476,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-4">
-    <h2 class="text-xl font-semibold">ComfyUI 后端代理客户端（/api + /ws）</h2>
-    <div class="text-sm text-base-content/70">
-      使用流程：①读取配置文件的后端地址 → ②粘贴 Workflow JSON → ③点“解析节点”并选择节点 → ④运行 → ⑤自动显示结果图
-    </div>
 
     <ConnectionCard
       :backend-origin="backendLabel"
@@ -466,6 +492,14 @@ onBeforeUnmount(() => {
     />
 
     <ParamsCard v-model:fields="paramFields" @run="onRun" @stop="onStop" />
+
+    <ProgressCard
+      :value="progressValue"
+      :max="progressMax"
+      :node="progressNode"
+      :queue-remaining="progressQueueRemaining"
+      :status-text="progressStatus"
+    />
 
     <LogCard :log-text="logText" />
     <OutputCard :images="images" />
