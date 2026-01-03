@@ -65,3 +65,6 @@ dmypy.json
 # Coverage
 .coverage
 .coverage.*
+
+# Local config (contains private IPs)
+backend/config.json

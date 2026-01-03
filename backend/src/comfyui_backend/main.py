@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from .api.router import router as api_router
-from .config import get_settings
+from .config import get_settings, load_ui_config
 from .logging import setup_logging
 
 
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup() -> None:
         app.state.http_client = httpx.AsyncClient(timeout=settings.http_timeout_seconds)
+        load_ui_config()
 
     @app.on_event("shutdown")
     async def shutdown() -> None:

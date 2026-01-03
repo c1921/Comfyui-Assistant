@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ConnectionCard from './components/ConnectionCard.vue'
 import WorkflowCard from './components/WorkflowCard.vue'
 import ParamsCard from './components/ParamsCard.vue'
@@ -66,6 +66,8 @@ const wsState = ref('WS: 未连接')
 
 const workflowJson = ref('')
 const parseInfo = ref('')
+const lastParsedRaw = ref('')
+let parseTimer: ReturnType<typeof setTimeout> | null = null
 
 const paramFields = ref<ParamField[]>([])
 
@@ -87,6 +89,7 @@ const toWsOrigin = (origin: string) =>
 
 const baseHttp = () => `${backendOrigin()}/api`
 const baseWs = () => toWsOrigin(backendOrigin())
+const backendLabel = computed(() => backendOrigin())
 
 const log = (msg: string) => {
   const ts = new Date().toLocaleTimeString()
@@ -327,19 +330,25 @@ const buildWorkflowWithParams = () => {
   return wf
 }
 
-const onParse = () => {
-  const raw = workflowJson.value.trim()
+const parseWorkflow = (raw: string, notify: boolean) => {
   const obj = safeJsonParse(raw)
   if (!obj || typeof obj !== 'object') {
-    alert('JSON 解析失败：请确认粘贴的是完整 workflow JSON')
-    return
+    if (notify) alert('JSON 解析失败：请确认粘贴的是完整 workflow JSON')
+    return false
   }
   workflow.value = obj as WorkflowMap
   paramFields.value = buildEditableParams(workflow.value)
 
   parseInfo.value = `解析成功：发现 ${paramFields.value.length} 个可编辑字段。`
+  lastParsedRaw.value = raw
 
   log('Workflow 已加载并解析节点。')
+  return true
+}
+
+const onParse = () => {
+  const raw = workflowJson.value.trim()
+  if (!parseWorkflow(raw, true)) return
 }
 
 const onClear = () => {
@@ -349,6 +358,7 @@ const onClear = () => {
   paramFields.value = []
   images.value = []
   shownFiles.clear()
+  lastParsedRaw.value = ''
   log('已清空。')
 }
 
@@ -397,6 +407,34 @@ const onStop = async () => {
 
 log(`clientId=${clientId.value}`)
 
+const fetchBackendConfig = async () => {
+  try {
+    const resp = await fetch(`${baseHttp()}/config`)
+    if (!resp.ok) return
+    const data = await resp.json()
+    if (typeof data?.pcIp === 'string') pcIp.value = data.pcIp
+    if (typeof data?.pcPort === 'string') pcPort.value = data.pcPort
+  } catch {
+    // Ignore config load failures
+  }
+}
+
+onMounted(async () => {
+  await fetchBackendConfig()
+  connectWs()
+})
+
+watch(workflowJson, (next) => {
+  const raw = next.trim()
+  if (!raw) return
+  if (raw === lastParsedRaw.value) return
+  if (parseTimer) clearTimeout(parseTimer)
+  parseTimer = setTimeout(() => {
+    if (raw !== workflowJson.value.trim()) return
+    parseWorkflow(raw, false)
+  }, 300)
+})
+
 onBeforeUnmount(() => {
   if (ws.value) ws.value.close()
 })
@@ -406,12 +444,11 @@ onBeforeUnmount(() => {
   <div>
     <h2>ComfyUI 后端代理客户端（/api + /ws）</h2>
     <div class="small">
-      使用流程：①确认后端地址 → ②粘贴 Workflow JSON → ③点“解析节点”并选择节点 → ④运行 → ⑤自动显示结果图
+      使用流程：①读取配置文件的后端地址 → ②粘贴 Workflow JSON → ③点“解析节点”并选择节点 → ④运行 → ⑤自动显示结果图
     </div>
 
     <ConnectionCard
-      v-model:pc-ip="pcIp"
-      v-model:pc-port="pcPort"
+      :backend-origin="backendLabel"
       :ws-state="wsState"
       @connect="connectWs"
       @disconnect="disconnectWs"
