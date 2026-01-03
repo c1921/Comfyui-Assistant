@@ -6,6 +6,10 @@ import ParamsCard from './components/ParamsCard.vue'
 import LogCard from './components/LogCard.vue'
 import OutputCard from './components/OutputCard.vue'
 
+onMounted(() => {
+  setTimeout(() => window.HSStaticMethods.autoInit(), 100)
+});
+
 interface WorkflowNode {
   class_type?: string
   _meta?: { title?: string }
@@ -441,9 +445,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div>
-    <h2>ComfyUI 后端代理客户端（/api + /ws）</h2>
-    <div class="small">
+  <div class="space-y-4">
+    <h2 class="text-xl font-semibold">ComfyUI 后端代理客户端（/api + /ws）</h2>
+    <div class="text-sm text-base-content/70">
       使用流程：①读取配置文件的后端地址 → ②粘贴 Workflow JSON → ③点“解析节点”并选择节点 → ④运行 → ⑤自动显示结果图
     </div>
 
@@ -461,11 +465,7 @@ onBeforeUnmount(() => {
       @clear="onClear"
     />
 
-    <ParamsCard
-      v-model:fields="paramFields"
-      @run="onRun"
-      @stop="onStop"
-    />
+    <ParamsCard v-model:fields="paramFields" @run="onRun" @stop="onStop" />
 
     <LogCard :log-text="logText" />
     <OutputCard :images="images" />

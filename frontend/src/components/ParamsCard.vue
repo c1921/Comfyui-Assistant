@@ -44,61 +44,62 @@ const asTextarea = (value: unknown) => {
 </script>
 
 <template>
-  <div class="card">
-    <h3 style="margin: 0 0 8px 0">2) 参数设置（会写回 workflow）</h3>
+  <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+    <h3 class="mb-2 text-base font-semibold">2) 参数设置（会写回 workflow）</h3>
 
-    <div v-if="props.fields.length === 0" class="small">
+    <div v-if="props.fields.length === 0" class="text-sm text-base-content/70">
       未发现可编辑字段。提示：只有 string/number/boolean 会被展示，连线引用会被跳过。
     </div>
     <div v-else>
-      <div v-for="group in groups" :key="group.key" style="margin-top: 10px">
-        <div class="small" style="margin-bottom: 6px">节点：{{ group.label }}</div>
-        <div
-          v-for="field in group.items"
-          :key="field.id"
-          class="row"
-          style="margin-bottom: 6px"
-        >
-          <label>
-            {{ field.inputKey }}：
+      <div v-for="group in groups" :key="group.key" class="mt-3">
+        <div class="mb-1.5 text-xs text-base-content/60">节点：{{ group.label }}</div>
+        <div v-for="field in group.items" :key="field.id" class="mb-2">
+          <label
+            v-if="field.inputType === 'boolean'"
+            class="inline-flex items-center gap-2 text-sm text-base-content/80"
+          >
+            <span>{{ field.inputKey }}：</span>
             <input
-              v-if="field.inputType === 'number'"
-              type="number"
-              :value="field.value"
-              style="width: 180px"
-              @input="
-                updateFieldValue(field.id, Number(($event.target as HTMLInputElement).value))
-              "
-            />
-            <input
-              v-else-if="field.inputType === 'boolean'"
               type="checkbox"
+              class="checkbox checkbox-sm"
               :checked="Boolean(field.value)"
               @change="
                 updateFieldValue(field.id, ($event.target as HTMLInputElement).checked)
               "
             />
+          </label>
+          <div v-else class="flex flex-wrap items-start gap-2 text-sm text-base-content/80">
+            <span>{{ field.inputKey }}：</span>
+            <input
+              v-if="field.inputType === 'number'"
+              type="number"
+              class="input input-bordered input-sm w-32 sm:w-44"
+              :value="field.value"
+              @input="
+                updateFieldValue(field.id, Number(($event.target as HTMLInputElement).value))
+              "
+            />
             <textarea
               v-else-if="asTextarea(field.value)"
+              class="textarea textarea-bordered textarea-sm w-full max-w-130"
               :value="String(field.value)"
-              style="width: 520px"
               rows="3"
               @input="updateFieldValue(field.id, ($event.target as HTMLTextAreaElement).value)"
             ></textarea>
             <input
               v-else
+              class="input input-bordered input-sm w-full max-w-130"
               :value="String(field.value)"
-              style="width: 520px"
               @input="updateFieldValue(field.id, ($event.target as HTMLInputElement).value)"
             />
-          </label>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="row" style="margin-top: 12px">
-      <button @click="emit('run')">运行</button>
-      <button @click="emit('stop')">中止（Interrupt）</button>
+    <div class="mt-3 flex flex-wrap gap-3">
+      <button class="btn btn-primary btn-sm" @click="emit('run')">运行</button>
+      <button class="btn btn-outline btn-sm" @click="emit('stop')">中止（Interrupt）</button>
     </div>
   </div>
 </template>
