@@ -98,6 +98,7 @@ const progressNode = ref<string | null>(null)
 const progressQueueRemaining = ref<number | null>(null)
 const progressStatus = ref('等待进度...')
 const isRunning = ref(false)
+const autoRandomSeed = ref(true)
 
 const backendOrigin = () => {
   const host = pcIp.value.trim()
@@ -397,6 +398,21 @@ const buildWorkflowWithParams = () => {
   return wf
 }
 
+const randomizeSeedFields = () => {
+  if (!autoRandomSeed.value) return
+  let updated = false
+  const next = paramFields.value.map((field) => {
+    if (field.inputKey.trim().toLowerCase() !== 'seed') return field
+    const nextSeed = Math.floor(Math.random() * 2 ** 32)
+    updated = true
+    if (field.inputType === 'string') {
+      return { ...field, value: String(nextSeed) }
+    }
+    return { ...field, value: nextSeed }
+  })
+  if (updated) paramFields.value = next
+}
+
 const parseWorkflow = (raw: string, notify: boolean) => {
   const obj = safeJsonParse(raw)
   if (!obj || typeof obj !== 'object') {
@@ -438,6 +454,7 @@ const onClear = () => {
 const onRun = async () => {
   try {
     isRunning.value = true
+    randomizeSeedFields()
     images.value = []
     shownFiles.clear()
     progressValue.value = null
@@ -534,7 +551,13 @@ onBeforeUnmount(() => {
             @clear="onClear"
           />
 
-          <ParamsCard v-model:fields="paramFields" @run="onRun" @stop="onStop" />
+          <ParamsCard
+            v-model:fields="paramFields"
+            :auto-random-seed="autoRandomSeed"
+            @update:auto-random-seed="autoRandomSeed = $event"
+            @run="onRun"
+            @stop="onStop"
+          />
 
           <ProgressCard
             :value="progressValue"

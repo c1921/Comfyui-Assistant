@@ -10,10 +10,14 @@ type ParamField = {
   inputType: 'string' | 'number' | 'boolean'
 }
 
-const props = defineProps<{ fields: ParamField[] }>()
+const props = defineProps<{
+  fields: ParamField[]
+  autoRandomSeed: boolean
+}>()
 
 const emit = defineEmits<{
   (e: 'update:fields', value: ParamField[]): void
+  (e: 'update:autoRandomSeed', value: boolean): void
   (e: 'run'): void
   (e: 'stop'): void
 }>()
@@ -41,6 +45,8 @@ const asTextarea = (value: unknown) => {
   if (typeof value !== 'string') return false
   return value.length > 80 || value.includes('\n')
 }
+
+const isSeedField = (inputKey: string) => inputKey.trim().toLowerCase() === 'seed'
 </script>
 
 <template>
@@ -68,7 +74,7 @@ const asTextarea = (value: unknown) => {
               "
             />
           </label>
-          <div v-else class="flex flex-wrap items-start gap-2 text-sm text-base-content/80">
+          <div v-else class="flex flex-wrap items-center gap-2 text-sm text-base-content/80">
             <span>{{ field.inputKey }}：</span>
             <input
               v-if="field.inputType === 'number'"
@@ -92,6 +98,20 @@ const asTextarea = (value: unknown) => {
               :value="String(field.value)"
               @input="updateFieldValue(field.id, ($event.target as HTMLInputElement).value)"
             />
+            <label
+              v-if="isSeedField(field.inputKey)"
+              class="ml-1 inline-flex items-center gap-1 text-xs text-base-content/70"
+            >
+              <span>随机</span>
+              <input
+                type="checkbox"
+                class="toggle toggle-xs"
+                :checked="props.autoRandomSeed"
+                @change="
+                  emit('update:autoRandomSeed', ($event.target as HTMLInputElement).checked)
+                "
+              />
+            </label>
           </div>
         </div>
       </div>
