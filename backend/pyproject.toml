@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-backend"
+version = "0.1.0"
+description = "FastAPI proxy for ComfyUI"
+requires-python = ">=3.9"
+
+dependencies = [
+  "fastapi",
+  "httpx",
+  "websockets",
+  "uvicorn",
+]
+
+[tool.uv]
