@@ -37,6 +37,19 @@ button {
   cursor: pointer;
 }
 
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #c9c9c9;
+  border-radius: 6px;
+  background: #f7f7f7;
+  color: #111;
+  cursor: pointer;
+  user-select: none;
+}
+
 .card {
   border: 1px solid #ddd;
   border-radius: 10px;
