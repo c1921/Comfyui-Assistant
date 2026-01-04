@@ -13,11 +13,20 @@ type ParamField = {
 const props = defineProps<{
   fields: ParamField[]
   autoRandomSeed: boolean
+  simpleMode: boolean
+  simplePrompt: string
+  simpleWidth: number
+  simpleHeight: number
+  sizePresets: { label: string; width: number; height: number }[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update:fields', value: ParamField[]): void
   (e: 'update:autoRandomSeed', value: boolean): void
+  (e: 'update:simpleMode', value: boolean): void
+  (e: 'update:simplePrompt', value: string): void
+  (e: 'update:simpleWidth', value: number): void
+  (e: 'update:simpleHeight', value: number): void
   (e: 'run'): void
   (e: 'stop'): void
 }>()
@@ -47,13 +56,76 @@ const asTextarea = (value: unknown) => {
 }
 
 const isSeedField = (inputKey: string) => inputKey.trim().toLowerCase() === 'seed'
+
+const onPresetChange = (ev: Event) => {
+  const value = (ev.target as HTMLSelectElement).value
+  const preset = props.sizePresets.find((item) => item.label === value)
+  if (!preset) return
+  emit('update:simpleWidth', preset.width)
+  emit('update:simpleHeight', preset.height)
+}
 </script>
 
 <template>
   <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
-    <h3 class="mb-2 text-base font-semibold">参数设置</h3>
+    <div class="mb-2 flex items-center justify-between gap-3">
+      <h3 class="text-base font-semibold">参数设置</h3>
+      <label class="inline-flex items-center gap-2 text-xs text-base-content/70">
+        <span>简易模式</span>
+        <input
+          type="checkbox"
+          class="toggle toggle-xs"
+          :checked="props.simpleMode"
+          @change="emit('update:simpleMode', ($event.target as HTMLInputElement).checked)"
+        />
+      </label>
+    </div>
 
-    <div v-if="props.fields.length === 0" class="text-sm text-base-content/70">
+    <div v-if="props.simpleMode" class="space-y-3">
+      <div>
+        <div class="mb-1 text-xs text-base-content/60">提示词</div>
+        <textarea
+          class="textarea textarea-bordered textarea-sm w-full"
+          rows="3"
+          :value="props.simplePrompt"
+          @input="emit('update:simplePrompt', ($event.target as HTMLTextAreaElement).value)"
+        ></textarea>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 text-xs text-base-content/60">
+          <span>预设</span>
+          <select class="select select-xs select-bordered" @change="onPresetChange">
+            <option value="">自定义</option>
+            <option v-for="preset in props.sizePresets" :key="preset.label" :value="preset.label">
+              {{ preset.label }} ({{ preset.width }}×{{ preset.height }})
+            </option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-base-content/60">
+          <span>宽</span>
+          <input
+            type="number"
+            class="input input-bordered input-xs w-24"
+            :value="props.simpleWidth"
+            @input="emit('update:simpleWidth', Number(($event.target as HTMLInputElement).value))"
+          />
+        </div>
+        <div class="flex items-center gap-2 text-xs text-base-content/60">
+          <span>高</span>
+          <input
+            type="number"
+            class="input input-bordered input-xs w-24"
+            :value="props.simpleHeight"
+            @input="emit('update:simpleHeight', Number(($event.target as HTMLInputElement).value))"
+          />
+        </div>
+      </div>
+      <div class="text-xs text-base-content/60">
+        简易模式会自动写入提示词与尺寸（如果节点存在对应输入）。
+      </div>
+    </div>
+
+    <div v-else-if="props.fields.length === 0" class="text-sm text-base-content/70">
       未发现可编辑字段。提示：只有 string/number/boolean 会被展示，连线引用会被跳过。
     </div>
     <div v-else>

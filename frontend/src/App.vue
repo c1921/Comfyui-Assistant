@@ -89,6 +89,19 @@ let parseTimer: ReturnType<typeof setTimeout> | null = null
 
 const paramFields = ref<ParamField[]>([])
 
+const simpleMode = ref(false)
+const simplePrompt = ref('')
+const simpleWidth = ref(512)
+const simpleHeight = ref(512)
+const sizePresets = [
+  { label: '512x512', width: 512, height: 512 },
+  { label: '768x512', width: 768, height: 512 },
+  { label: '512x768', width: 512, height: 768 },
+  { label: '1024x1024', width: 1024, height: 1024 },
+  { label: '1024x768', width: 1024, height: 768 },
+  { label: '768x1024', width: 768, height: 1024 },
+]
+
 const logLines = ref<string[]>([])
 const logText = computed(() => logLines.value.join('\n'))
 
@@ -215,6 +228,47 @@ const buildEditableParams = (wf: WorkflowMap) => {
     }
   }
   return fields
+}
+
+const updateFieldsByKey = (
+  fields: ParamField[],
+  key: string,
+  value: EditableValue,
+  preferredNodes: string[] = [],
+) => {
+  let updated = false
+  const next = fields.map((field) => {
+    if (field.inputKey !== key) return field
+    if (preferredNodes.length && !preferredNodes.includes(field.nodeLabel)) return field
+    updated = true
+    return { ...field, value }
+  })
+  if (updated) return next
+  return fields.map((field) => (field.inputKey === key ? { ...field, value } : field))
+}
+
+const syncSimpleFromFields = (fields: ParamField[]) => {
+  const promptField = fields.find((f) => f.inputKey === 'text' && typeof f.value === 'string')
+  if (promptField) simplePrompt.value = String(promptField.value)
+
+  const widthField = fields.find((f) => f.inputKey === 'width' && typeof f.value === 'number')
+  const heightField = fields.find((f) => f.inputKey === 'height' && typeof f.value === 'number')
+  if (widthField) simpleWidth.value = Number(widthField.value)
+  if (heightField) simpleHeight.value = Number(heightField.value)
+}
+
+const applySimpleOverrides = () => {
+  const preferredPromptNodes = ['CLIPTextEncode', 'CLIPTextEncode (1)', 'CLIPTextEncode (2)']
+  let next = updateFieldsByKey(paramFields.value, 'text', simplePrompt.value, preferredPromptNodes)
+  next = updateFieldsByKey(next, 'width', simpleWidth.value, [
+    'EmptyLatentImage',
+    'EmptySD3LatentImage',
+  ])
+  next = updateFieldsByKey(next, 'height', simpleHeight.value, [
+    'EmptyLatentImage',
+    'EmptySD3LatentImage',
+  ])
+  paramFields.value = next
 }
 
 const ensureWsConnected = () => {
@@ -493,9 +547,11 @@ const parseWorkflow = async (raw: string, notify: boolean) => {
     }
     workflow.value = converted
     paramFields.value = buildEditableParams(workflow.value)
+    syncSimpleFromFields(paramFields.value)
   } else if (looksLikeApiPrompt(obj)) {
     workflow.value = obj as WorkflowMap
     paramFields.value = buildEditableParams(workflow.value)
+    syncSimpleFromFields(paramFields.value)
   } else {
     if (notify) alert('JSON 结构不符合 workflow 或 API prompt')
     return false
@@ -569,6 +625,7 @@ const onRun = async () => {
 
     ensureWsConnected()
 
+    if (simpleMode.value) applySimpleOverrides()
     const wf = buildWorkflowWithParams()
     log('正在提交任务到 /api/prompt ...')
     const res = await postPrompt(wf)
@@ -645,6 +702,10 @@ onBeforeUnmount(() => {
 watch([pcIp, pcPort], () => {
   refreshComfyHealth()
 })
+
+watch(simpleMode, (enabled) => {
+  if (enabled) syncSimpleFromFields(paramFields.value)
+})
 </script>
 
 <template>
@@ -669,7 +730,16 @@ watch([pcIp, pcPort], () => {
           <ParamsCard
             v-model:fields="paramFields"
             :auto-random-seed="autoRandomSeed"
+            :simple-mode="simpleMode"
+            :simple-prompt="simplePrompt"
+            :simple-width="simpleWidth"
+            :simple-height="simpleHeight"
+            :size-presets="sizePresets"
             @update:auto-random-seed="autoRandomSeed = $event"
+            @update:simple-mode="simpleMode = $event"
+            @update:simple-prompt="simplePrompt = $event"
+            @update:simple-width="simpleWidth = $event"
+            @update:simple-height="simpleHeight = $event"
             @run="onRun"
             @stop="onStop"
           />
