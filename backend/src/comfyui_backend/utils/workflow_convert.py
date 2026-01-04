@@ -3,7 +3,7 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-UNSUPPORTED_NODE_TYPES = {"MarkdownNote"}
+UNSUPPORTED_NODE_TYPES = {"MarkdownNote", "Note"}
 NODE_WIDGET_MAPPINGS = {
     "KSampler": ["seed", "seed_control", "steps", "cfg", "sampler_name", "scheduler", "denoise"],
     "CLIPTextEncode": ["text"],
@@ -14,6 +14,8 @@ NODE_WIDGET_MAPPINGS = {
     "VAELoader": ["vae_name"],
     "CLIPLoader": ["clip_name", "type", "device"],
     "UnetLoaderGGUF": ["unet_name"],
+    "UNETLoader": ["unet_name", "weight_dtype"],
+    "LoraLoaderModelOnly": ["lora_name", "strength_model"],
 }
 
 

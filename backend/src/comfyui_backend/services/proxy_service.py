@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from fastapi import Request, WebSocket
+from fastapi.responses import JSONResponse
 import httpx
 
 from ..config import Settings
@@ -17,6 +18,7 @@ class ProxyService:
         self._client = client
         self._logger = logging.getLogger(__name__)
         self._unsupported_node_types = set(UNSUPPORTED_NODE_TYPES)
+        self._node_registry_attr = "node_registry"
 
     def _looks_like_api_prompt(self, prompt: dict) -> bool:
         for value in prompt.values():
@@ -28,18 +30,32 @@ class ProxyService:
     def _looks_like_workflow_json(self, prompt: dict) -> bool:
         return isinstance(prompt.get("nodes"), list) and isinstance(prompt.get("links"), list)
 
-    def _strip_unsupported_nodes_workflow(self, prompt: dict) -> dict:
+    def _strip_unsupported_nodes_workflow(
+        self,
+        prompt: dict,
+        supported_types: set[str] | None,
+    ) -> dict:
         nodes = prompt.get("nodes")
         links = prompt.get("links")
         if not isinstance(nodes, list) or not isinstance(links, list):
             return prompt
 
         removed_ids = set()
+        removed_types = set()
         kept_nodes = []
         for node in nodes:
             node_type = node.get("type")
             node_id = node.get("id")
-            if node_type in self._unsupported_node_types:
+            if not node_type:
+                continue
+            if supported_types is not None:
+                if node_type not in supported_types:
+                    removed_types.add(node_type)
+                    removed_ids.add(node_id)
+                    removed_ids.add(str(node_id))
+                    continue
+            elif node_type in self._unsupported_node_types:
+                removed_types.add(node_type)
                 removed_ids.add(node_id)
                 removed_ids.add(str(node_id))
                 continue
@@ -57,31 +73,55 @@ class ProxyService:
         cleaned = dict(prompt)
         cleaned["nodes"] = kept_nodes
         cleaned["links"] = kept_links
+        if removed_types:
+            self._logger.info(
+                "Removed unsupported workflow node types: %s",
+                sorted(removed_types),
+            )
         self._logger.info(
             "Stripped unsupported nodes from workflow: %s",
             sorted(removed_ids, key=lambda v: str(v)),
         )
         return cleaned
 
-    def _strip_unsupported_nodes_api(self, prompt: dict) -> dict:
+    def _strip_unsupported_nodes_api(
+        self,
+        prompt: dict,
+        supported_types: set[str] | None,
+    ) -> dict:
         removed_keys = []
+        removed_types = set()
         cleaned = {}
         for key, value in prompt.items():
-            if isinstance(value, dict) and value.get("class_type") in self._unsupported_node_types:
-                removed_keys.append(key)
-                continue
+            if isinstance(value, dict):
+                node_type = value.get("class_type")
+                if supported_types is not None:
+                    if node_type and node_type not in supported_types:
+                        removed_types.add(node_type)
+                        removed_keys.append(key)
+                        continue
+                elif node_type in self._unsupported_node_types:
+                    removed_types.add(node_type)
+                    removed_keys.append(key)
+                    continue
             cleaned[key] = value
         if removed_keys:
+            if removed_types:
+                self._logger.info("Removed unsupported API node types: %s", sorted(removed_types))
             self._logger.info("Stripped unsupported nodes from API prompt: %s", sorted(removed_keys))
             return cleaned
         return prompt
 
-    def _maybe_convert_prompt(self, payload: dict) -> dict:
+    def _maybe_convert_prompt(
+        self,
+        payload: dict,
+        supported_types: set[str] | None,
+    ) -> dict:
         prompt = payload.get("prompt")
         if not isinstance(prompt, dict):
             return payload
         if self._looks_like_api_prompt(prompt):
-            prompt = self._strip_unsupported_nodes_api(prompt)
+            prompt = self._strip_unsupported_nodes_api(prompt, supported_types)
             if prompt is payload.get("prompt"):
                 return payload
             updated = dict(payload)
@@ -89,7 +129,7 @@ class ProxyService:
             return updated
         if not self._looks_like_workflow_json(prompt):
             return payload
-        prompt = self._strip_unsupported_nodes_workflow(prompt)
+        prompt = self._strip_unsupported_nodes_workflow(prompt, supported_types)
         try:
             converted = convert_workflow_to_api(prompt)
         except Exception:
@@ -97,10 +137,22 @@ class ProxyService:
             return payload
         if isinstance(converted, dict):
             updated = dict(payload)
-            updated["prompt"] = self._strip_unsupported_nodes_api(converted)
+            updated["prompt"] = self._strip_unsupported_nodes_api(converted, supported_types)
             self._logger.info("Workflow converted to API format for /prompt request.")
             return updated
         return payload
+
+    async def _get_supported_node_types(self, request: Request) -> set[str] | None:
+        if not self._client:
+            return None
+        registry = getattr(request.app.state, self._node_registry_attr, None)
+        if not registry:
+            return None
+        try:
+            return await registry.get_supported_types(self._client, self._settings)
+        except Exception:
+            self._logger.exception("Failed to resolve ComfyUI node registry.")
+            return None
 
     async def proxy_http(self, path: str, request: Request):
         if not self._client:
@@ -114,16 +166,30 @@ class ProxyService:
             except Exception:
                 payload = None
             if isinstance(payload, dict):
-                payload = self._maybe_convert_prompt(payload)
+                supported_types = await self._get_supported_node_types(request)
+                payload = self._maybe_convert_prompt(payload, supported_types)
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
-        resp = await self._client.request(
-            request.method,
-            url,
-            params=request.query_params,
-            content=body,
-            headers=headers,
-        )
+        try:
+            resp = await self._client.request(
+                request.method,
+                url,
+                params=request.query_params,
+                content=body,
+                headers=headers,
+            )
+        except httpx.RequestError as exc:
+            self._logger.warning("ComfyUI request failed %s %s: %s", request.method, url, exc)
+            return JSONResponse(
+                {
+                    "error": {
+                        "type": "upstream_unreachable",
+                        "message": "ComfyUI not reachable",
+                        "details": str(exc),
+                    }
+                },
+                status_code=502,
+            )
         if path == "prompt" and resp.status_code >= 400:
             try:
                 err_text = resp.text

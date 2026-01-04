@@ -5,6 +5,7 @@ import httpx
 from .api.router import router as api_router
 from .config import get_settings, load_ui_config
 from .logging import setup_logging
+from .services.node_registry import NodeRegistry
 
 
 def create_app() -> FastAPI:
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup() -> None:
         app.state.http_client = httpx.AsyncClient(timeout=settings.http_timeout_seconds)
+        app.state.node_registry = NodeRegistry()
         load_ui_config()
 
     @app.on_event("shutdown")
