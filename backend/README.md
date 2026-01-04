@@ -76,4 +76,7 @@ uvicorn comfyui_backend.main:app --host 0.0.0.0 --port 8000
   `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`
 - `albumPath` 必须是有效目录，通常指向 ComfyUI 输出目录。
 - 若上传的是 ComfyUI 编辑器导出的 workflow.json，后端会自动转换为 API workflow。
+- 转换逻辑位于 `backend/src/comfyui_backend/utils/workflow_convert.py`，会优先读取节点的 widget 定义，
+  若缺失则使用内置的节点映射（例如 `KSampler`、`CLIPLoader`、`SaveImage` 等）从 `widgets_values` 填充必填输入。
 - 转换时会忽略不支持的节点（如 `MarkdownNote`），避免 ComfyUI 执行报错。
+- 若仍出现必填输入缺失，请优先使用 ComfyUI 导出的 API workflow，或扩展转换映射表。
