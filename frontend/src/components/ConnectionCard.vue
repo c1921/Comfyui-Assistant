@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ backendOrigin: string; wsState: string }>()
+const props = defineProps<{ backendOrigin: string; wsState: string; comfyState: string }>()
 const emit = defineEmits<{
   (e: 'connect'): void
   (e: 'disconnect'): void
@@ -13,6 +13,7 @@ const emit = defineEmits<{
         后端地址（配置文件）：<strong class="font-semibold text-base-content">{{ props.backendOrigin }}</strong>
       </span>
       <span class="badge badge-outline text-xs">{{ props.wsState }}</span>
+      <span class="badge badge-outline text-xs">{{ props.comfyState }}</span>
       <button class="btn btn-sm btn-primary" @click="emit('connect')">连接 WS</button>
       <button class="btn btn-sm btn-outline" @click="emit('disconnect')">断开 WS</button>
     </div>

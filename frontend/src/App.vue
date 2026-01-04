@@ -76,6 +76,7 @@ const shownFiles = new Set<string>()
 const pcIp = ref('')
 const pcPort = ref('8000')
 const wsState = ref('WS: 未连接')
+const comfyState = ref('ComfyUI: 未检测')
 
 const workflowJson = ref('')
 const parseInfo = ref('')
@@ -119,6 +120,26 @@ const backendLabel = computed(() => backendOrigin())
 const log = (msg: string) => {
   const ts = new Date().toLocaleTimeString()
   logLines.value = [`[${ts}] ${msg}`, ...logLines.value]
+}
+
+let comfyTimer: ReturnType<typeof setInterval> | null = null
+
+const refreshComfyHealth = async () => {
+  try {
+    const resp = await fetch(`${baseHttp()}/comfy/health`)
+    if (!resp.ok) {
+      comfyState.value = `ComfyUI: 后端异常(${resp.status})`
+      return
+    }
+    const data = await resp.json()
+    if (data?.status === 'ok') {
+      comfyState.value = 'ComfyUI: 在线'
+    } else {
+      comfyState.value = 'ComfyUI: 未启动'
+    }
+  } catch (err) {
+    comfyState.value = `ComfyUI: 连接失败`
+  }
 }
 
 const safeJsonParse = (raw: string) => {
@@ -527,6 +548,8 @@ onMounted(async () => {
   await fetchBackendConfig()
   await fetchAlbum()
   connectWs()
+  await refreshComfyHealth()
+  comfyTimer = setInterval(refreshComfyHealth, 10000)
 })
 
 watch(workflowJson, (next) => {
@@ -542,6 +565,11 @@ watch(workflowJson, (next) => {
 
 onBeforeUnmount(() => {
   if (ws.value) ws.value.close()
+  if (comfyTimer) clearInterval(comfyTimer)
+})
+
+watch([pcIp, pcPort], () => {
+  refreshComfyHealth()
 })
 </script>
 
@@ -604,6 +632,7 @@ onBeforeUnmount(() => {
           <ConnectionCard
             :backend-origin="backendLabel"
             :ws-state="wsState"
+            :comfy-state="comfyState"
             @connect="connectWs"
             @disconnect="disconnectWs"
           />
