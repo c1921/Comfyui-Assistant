@@ -21,6 +21,10 @@ interface WorkflowNode {
 }
 
 type WorkflowMap = Record<string, WorkflowNode>
+type WorkflowJson = {
+  nodes: unknown[]
+  links: unknown[]
+}
 
 type EditableValue = string | number | boolean
 
@@ -139,6 +143,44 @@ const refreshComfyHealth = async () => {
     }
   } catch (err) {
     comfyState.value = `ComfyUI: 连接失败`
+  }
+}
+
+const looksLikeApiPrompt = (value: unknown): value is WorkflowMap => {
+  if (!value || typeof value !== 'object') return false
+  for (const item of Object.values(value as Record<string, unknown>)) {
+    if (item && typeof item === 'object' && 'class_type' in item && 'inputs' in item) {
+      return true
+    }
+    break
+  }
+  return false
+}
+
+const looksLikeWorkflowJson = (value: unknown): value is WorkflowJson => {
+  if (!value || typeof value !== 'object') return false
+  const obj = value as WorkflowJson
+  return Array.isArray(obj.nodes) && Array.isArray(obj.links)
+}
+
+const convertWorkflow = async (workflowObj: WorkflowJson): Promise<WorkflowMap | null> => {
+  try {
+    const resp = await fetch(`${baseHttp()}/workflow/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflow: workflowObj }),
+    })
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '')
+      log(`工作流转换失败：HTTP ${resp.status} ${text}`.trim())
+      return null
+    }
+    const data = await resp.json()
+    if (!data || typeof data !== 'object') return null
+    return data as WorkflowMap
+  } catch (err) {
+    log(`工作流转换失败：${(err as Error)?.message || String(err)}`)
+    return null
   }
 }
 
@@ -436,14 +478,28 @@ const randomizeSeedFields = () => {
   if (updated) paramFields.value = next
 }
 
-const parseWorkflow = (raw: string, notify: boolean) => {
+const parseWorkflow = async (raw: string, notify: boolean) => {
   const obj = safeJsonParse(raw)
   if (!obj || typeof obj !== 'object') {
     if (notify) alert('JSON 解析失败：请确认粘贴的是完整 workflow JSON')
     return false
   }
-  workflow.value = obj as WorkflowMap
-  paramFields.value = buildEditableParams(workflow.value)
+  if (looksLikeWorkflowJson(obj) && !looksLikeApiPrompt(obj)) {
+    parseInfo.value = '检测到编辑器工作流，正在转换为 API 格式...'
+    const converted = await convertWorkflow(obj)
+    if (!converted) {
+      parseInfo.value = '转换失败：请检查后端日志或工作流内容'
+      return false
+    }
+    workflow.value = converted
+    paramFields.value = buildEditableParams(workflow.value)
+  } else if (looksLikeApiPrompt(obj)) {
+    workflow.value = obj as WorkflowMap
+    paramFields.value = buildEditableParams(workflow.value)
+  } else {
+    if (notify) alert('JSON 结构不符合 workflow 或 API prompt')
+    return false
+  }
 
   parseInfo.value = `解析成功：发现 ${paramFields.value.length} 个可编辑字段。`
   lastParsedRaw.value = raw
@@ -452,9 +508,9 @@ const parseWorkflow = (raw: string, notify: boolean) => {
   return true
 }
 
-const onParse = () => {
+const onParse = async () => {
   const raw = workflowJson.value.trim()
-  if (!parseWorkflow(raw, true)) return
+  if (!(await parseWorkflow(raw, true))) return
 }
 
 const onClear = () => {
@@ -559,7 +615,7 @@ watch(workflowJson, (next) => {
   if (parseTimer) clearTimeout(parseTimer)
   parseTimer = setTimeout(() => {
     if (raw !== workflowJson.value.trim()) return
-    parseWorkflow(raw, false)
+    void parseWorkflow(raw, false)
   }, 300)
 })
 
