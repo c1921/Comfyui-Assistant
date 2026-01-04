@@ -8,20 +8,15 @@ from ..config import Settings
 from ..integrations import comfy_ws
 from ..utils.headers import rewrite_request_headers, filter_response_headers
 from ..utils.response import build_response
-
-try:
-    from comfyuiclient import convert_workflow_to_api
-except Exception:  # pragma: no cover - optional dependency
-    convert_workflow_to_api = None
+from ..utils.workflow_convert import convert_workflow_to_api, UNSUPPORTED_NODE_TYPES
 
 
 class ProxyService:
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None) -> None:
         self._settings = settings
         self._client = client
-        self._warned_no_converter = False
         self._logger = logging.getLogger(__name__)
-        self._unsupported_node_types = {"MarkdownNote"}
+        self._unsupported_node_types = set(UNSUPPORTED_NODE_TYPES)
 
     def _looks_like_api_prompt(self, prompt: dict) -> bool:
         for value in prompt.values():
@@ -82,13 +77,6 @@ class ProxyService:
         return prompt
 
     def _maybe_convert_prompt(self, payload: dict) -> dict:
-        if not convert_workflow_to_api:
-            if not self._warned_no_converter:
-                self._logger.warning(
-                    "Workflow conversion skipped: comfyui-workflow-client is not installed."
-                )
-                self._warned_no_converter = True
-            return payload
         prompt = payload.get("prompt")
         if not isinstance(prompt, dict):
             return payload
