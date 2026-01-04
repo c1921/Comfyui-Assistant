@@ -12,6 +12,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'refresh'): void
+  (e: 'delete', item: AlbumItem): void
   (e: 'update:sortOrder', value: 'asc' | 'desc'): void
 }>()
 
@@ -20,6 +21,7 @@ const onSortChange = (ev: Event) => {
   emit('update:sortOrder', value)
   emit('refresh')
 }
+const onDeleteClick = (item: AlbumItem) => emit('delete', item)
 </script>
 
 <template>
@@ -41,14 +43,41 @@ const onSortChange = (ev: Event) => {
       暂无图片（请检查配置文件 albumPath 是否正确）。
     </div>
     <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <img
+      <div
         v-for="item in props.items"
         :key="item.url"
-        :src="item.url"
-        :alt="item.name"
-        class="h-auto w-full rounded-lg border border-base-200 shadow-sm"
-        loading="lazy"
-      />
+        class="group overflow-hidden rounded-lg border border-base-200 shadow-sm"
+      >
+        <div class="relative">
+          <img
+            :src="item.url"
+            :alt="item.name"
+            class="h-auto w-full"
+            loading="lazy"
+          />
+          <button
+            class="btn btn-xs btn-error absolute right-2 top-2 hidden shadow-sm opacity-0 transition-opacity sm:inline-flex sm:group-hover:opacity-100"
+            type="button"
+            @click="onDeleteClick(item)"
+            aria-label="删除图片"
+          >
+            删除
+          </button>
+        </div>
+        <div class="flex items-center justify-between gap-2 p-2 sm:hidden">
+          <span class="min-w-0 flex-1 truncate text-xs text-base-content/70">
+            {{ item.name }}
+          </span>
+          <button
+            class="btn btn-xs btn-error"
+            type="button"
+            @click="onDeleteClick(item)"
+            aria-label="删除图片"
+          >
+            删除
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

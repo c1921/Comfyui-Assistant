@@ -64,3 +64,20 @@ async def get_album_image(filename: str) -> FileResponse:
     if not _is_allowed_image(target):
         raise HTTPException(status_code=404, detail="图片不存在")
     return FileResponse(target)
+
+
+@router.delete("/api/album/file/{filename}")
+async def delete_album_image(filename: str):
+    if not filename or Path(filename).name != filename:
+        raise HTTPException(status_code=400, detail="非法文件名")
+    album_dir = _get_album_dir()
+    target = (album_dir / filename).resolve()
+    if album_dir not in target.parents and target != album_dir:
+        raise HTTPException(status_code=400, detail="非法路径")
+    if not _is_allowed_image(target):
+        raise HTTPException(status_code=404, detail="图片不存在")
+    try:
+        target.unlink()
+    except Exception:
+        raise HTTPException(status_code=500, detail="删除失败")
+    return {"status": "ok"}

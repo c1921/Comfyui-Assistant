@@ -513,6 +513,24 @@ const onParse = async () => {
   if (!(await parseWorkflow(raw, true))) return
 }
 
+const deleteAlbumItem = async (item: AlbumItem) => {
+  const ok = confirm(`删除图片 "${item.name}"？此操作会删除磁盘文件。`)
+  if (!ok) return
+  try {
+    const resp = await fetch(`${baseHttp()}/album/file/${encodeURIComponent(item.name)}`, {
+      method: 'DELETE',
+    })
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '')
+      albumError.value = `删除失败：HTTP ${resp.status} ${text}`.trim()
+      return
+    }
+    albumImages.value = albumImages.value.filter((img) => img.name !== item.name)
+  } catch (err) {
+    albumError.value = `删除失败：${(err as Error)?.message || String(err)}`
+  }
+}
+
 const onClear = () => {
   workflowJson.value = ''
   parseInfo.value = ''
@@ -674,6 +692,7 @@ watch([pcIp, pcPort], () => {
             :sort-order="albumSortOrder"
             @update:sort-order="albumSortOrder = $event"
             @refresh="fetchAlbum"
+            @delete="deleteAlbumItem"
           />
         </div>
       </div>
