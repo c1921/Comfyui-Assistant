@@ -33,6 +33,14 @@ npm run dev
 
 浏览器打开 `http://localhost:5173`。
 
+也可以使用根目录的快速启动脚本（自动创建/安装依赖并启动前后端）：
+
+```bash
+python start.py
+```
+
+Windows 也可双击 `start.bat`。
+
 ## 配置
 
 后端配置存储在 `backend/config.json`。如果文件不存在，会从
