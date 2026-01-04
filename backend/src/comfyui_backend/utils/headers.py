@@ -11,6 +11,7 @@ def rewrite_request_headers(headers: Dict[str, str], target_base: str) -> Dict[s
     out["origin"] = target_base
     out["referer"] = target_base + "/"
     out.pop("host", None)
+    out.pop("content-length", None)
     return out
 
 

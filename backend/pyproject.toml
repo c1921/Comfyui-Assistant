@@ -9,6 +9,7 @@ dependencies = [
   "httpx",
   "websockets",
   "uvicorn",
+  "comfyui-workflow-client",
 ]
 
 [tool.uv]

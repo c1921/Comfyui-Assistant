@@ -69,4 +69,5 @@ npm run dev
 ## 说明
 
 - 后端会把其他 `/api/*` 与 `/*` 路由代理到 ComfyUI。
+- 后端会在提交 `/api/prompt` 时自动将编辑器 workflow 转换为 API workflow，并忽略不支持的节点（如 `MarkdownNote`）。
 - 请确保 `albumPath` 指向真实存在的输出目录。

@@ -75,3 +75,5 @@ uvicorn comfyui_backend.main:app --host 0.0.0.0 --port 8000
 - 相册仅允许以下后缀：
   `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`
 - `albumPath` 必须是有效目录，通常指向 ComfyUI 输出目录。
+- 若上传的是 ComfyUI 编辑器导出的 workflow.json，后端会自动转换为 API workflow。
+- 转换时会忽略不支持的节点（如 `MarkdownNote`），避免 ComfyUI 执行报错。
