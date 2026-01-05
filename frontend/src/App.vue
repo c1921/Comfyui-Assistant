@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import ConnectionCard from './components/ConnectionCard.vue'
 import WorkflowCard from './components/WorkflowCard.vue'
 import ParamsCard from './components/ParamsCard.vue'
@@ -9,788 +9,135 @@ import OutputCard from './components/OutputCard.vue'
 import AlbumCard from './components/AlbumCard.vue'
 import MainTabs from './components/MainTabs.vue'
 import FloatingRunButton from './components/FloatingRunButton.vue'
+import { useAlbum } from './composables/useAlbum'
+import { useConnection } from './composables/useConnection'
+import { usePersist } from './composables/usePersist'
+import { useRunner } from './composables/useRunner'
+import { useWorkflow } from './composables/useWorkflow'
+import type { EditableValue } from './types/app'
 
 onMounted(() => {
   setTimeout(() => window.HSStaticMethods.autoInit(), 100)
-});
+})
 
-interface WorkflowNode {
-  class_type?: string
-  _meta?: { title?: string }
-  inputs?: Record<string, unknown>
-}
-
-type WorkflowMap = Record<string, WorkflowNode>
-type WorkflowJson = {
-  nodes: unknown[]
-  links: unknown[]
-}
-
-type EditableValue = string | number | boolean
-
-type ParamField = {
-  id: string
-  nodeId: string
-  nodeLabel: string
-  inputKey: string
-  value: EditableValue
-  inputType: 'string' | 'number' | 'boolean'
-}
-
-type ImageFile = {
-  filename: string
-  subfolder?: string
-  type?: string
-}
-
-type ImageItem = {
-  src: string
-  alt: string
-}
-
-type AlbumItem = {
-  name: string
-  url: string
-}
-
-type PersistedState = {
-  workflowJson: string
-  paramValues: Record<string, EditableValue>
-  simpleMode: boolean
-  simplePrompt: string
-  simpleWidth: number
-  simpleHeight: number
-  autoRandomSeed: boolean
-  albumSortOrder: 'asc' | 'desc'
-}
-
-const STORAGE_KEY = 'comfyui-assistant-ui-state-v1'
-
-function makeUUID(): string {
-  const cryptoObj = globalThis.crypto
-  if (cryptoObj?.randomUUID && typeof cryptoObj.randomUUID === 'function') {
-    return cryptoObj.randomUUID()
-  }
-  if (cryptoObj?.getRandomValues && typeof cryptoObj.getRandomValues === 'function') {
-    const buf = new Uint8Array(16)
-    cryptoObj.getRandomValues(buf)
-    const b6 = buf[6] ?? 0
-    const b8 = buf[8] ?? 0
-    buf[6] = (b6 & 0x0f) | 0x40
-    buf[8] = (b8 & 0x3f) | 0x80
-    const hex = [...buf].map((b) => b.toString(16).padStart(2, '0')).join('')
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-  }
-  return `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-const clientId = ref(makeUUID())
-const ws = ref<WebSocket | null>(null)
-const workflow = ref<WorkflowMap | null>(null)
-const lastPromptId = ref<string | null>(null)
-const shownFiles = new Set<string>()
-
-const pcIp = ref('')
-const pcPort = ref('8000')
-const wsState = ref('WS: 未连接')
-const comfyState = ref('ComfyUI: 未检测')
-
-const workflowJson = ref('')
-const parseInfo = ref('')
-const lastParsedRaw = ref('')
-let parseTimer: ReturnType<typeof setTimeout> | null = null
-
-const paramFields = ref<ParamField[]>([])
-
-const simpleMode = ref(false)
-const simplePrompt = ref('')
-const simpleWidth = ref(512)
-const simpleHeight = ref(512)
-const sizePresets = [
-  { label: '512x512', width: 512, height: 512 },
-  { label: '768x512', width: 768, height: 512 },
-  { label: '512x768', width: 512, height: 768 },
-  { label: '1024x1024', width: 1024, height: 1024 },
-  { label: '1024x768', width: 1024, height: 768 },
-  { label: '768x1024', width: 768, height: 1024 },
-]
-
-const logLines = ref<string[]>([])
-const logText = computed(() => logLines.value.join('\n'))
-
-const images = ref<ImageItem[]>([])
-const albumImages = ref<AlbumItem[]>([])
-const albumError = ref('')
-const albumSortOrder = ref<'asc' | 'desc'>('desc')
-
-const progressValue = ref<number | null>(null)
-const progressMax = ref<number | null>(null)
-const progressNode = ref<string | null>(null)
-const progressQueueRemaining = ref<number | null>(null)
-const progressStatus = ref('等待进度...')
-const isRunning = ref(false)
-const autoRandomSeed = ref(true)
-const isOutputDone = ref(false)
 const persistedParamValues = ref<Record<string, EditableValue>>({})
 
-const backendOrigin = () => {
-  const host = pcIp.value.trim()
-  const port = pcPort.value.trim()
-  if (!host) return window.location.origin
-  if (port) return `http://${host}:${port}`
-  return `http://${host}`
-}
+const connection = useConnection()
+const album = useAlbum({
+  baseHttp: () => connection.baseHttp.value,
+  backendOrigin: () => connection.backendOrigin.value,
+})
+const runner = useRunner({
+  baseHttp: () => connection.baseHttp.value,
+  baseWs: () => connection.baseWs.value,
+  fetchAlbum: album.fetchAlbum,
+})
+const workflow = useWorkflow({
+  baseHttp: () => connection.baseHttp.value,
+  log: runner.log,
+  persistedParamValues,
+})
+const persist = usePersist({
+  workflowJson: workflow.workflowJson,
+  paramFields: workflow.paramFields,
+  simpleMode: workflow.simpleMode,
+  simplePrompt: workflow.simplePrompt,
+  simpleWidth: workflow.simpleWidth,
+  simpleHeight: workflow.simpleHeight,
+  autoRandomSeed: workflow.autoRandomSeed,
+  albumSortOrder: album.albumSortOrder,
+  persistedParamValues,
+})
 
-const toWsOrigin = (origin: string) =>
-  origin.replace(/^http(s?):\/\//, (_, s) => (s ? 'wss://' : 'ws://'))
+const { backendLabel, comfyState } = connection
+const { albumImages, albumError, albumSortOrder } = album
+const {
+  wsState,
+  logText,
+  images,
+  progressValue,
+  progressMax,
+  progressNode,
+  progressQueueRemaining,
+  progressStatus,
+  isRunning,
+} = runner
+const {
+  workflowJson,
+  parseInfo,
+  paramFields,
+  simpleMode,
+  simplePrompt,
+  simpleWidth,
+  simpleHeight,
+  sizePresets,
+  autoRandomSeed,
+} = workflow
+const { onParse } = workflow
+const { fetchAlbum, deleteAlbumItem } = album
+const { connectWs, disconnectWs } = runner
 
-const baseHttp = () => `${backendOrigin()}/api`
-const baseWs = () => toWsOrigin(backendOrigin())
-const backendLabel = computed(() => backendOrigin())
-
-const log = (msg: string) => {
-  const ts = new Date().toLocaleTimeString()
-  logLines.value = [`[${ts}] ${msg}`, ...logLines.value]
-}
-
-let comfyTimer: ReturnType<typeof setInterval> | null = null
-
-const refreshComfyHealth = async () => {
-  try {
-    const resp = await fetch(`${baseHttp()}/comfy/health`)
-    if (!resp.ok) {
-      comfyState.value = `ComfyUI: 后端异常(${resp.status})`
-      return
-    }
-    const data = await resp.json()
-    if (data?.status === 'ok') {
-      comfyState.value = 'ComfyUI: 在线'
-    } else {
-      comfyState.value = 'ComfyUI: 未启动'
-    }
-  } catch (err) {
-    comfyState.value = `ComfyUI: 连接失败`
-  }
-}
-
-const looksLikeApiPrompt = (value: unknown): value is WorkflowMap => {
-  if (!value || typeof value !== 'object') return false
-  for (const item of Object.values(value as Record<string, unknown>)) {
-    if (item && typeof item === 'object' && 'class_type' in item && 'inputs' in item) {
-      return true
-    }
-    break
-  }
-  return false
-}
-
-const looksLikeWorkflowJson = (value: unknown): value is WorkflowJson => {
-  if (!value || typeof value !== 'object') return false
-  const obj = value as WorkflowJson
-  return Array.isArray(obj.nodes) && Array.isArray(obj.links)
-}
-
-const convertWorkflow = async (workflowObj: WorkflowJson): Promise<WorkflowMap | null> => {
-  try {
-    const resp = await fetch(`${baseHttp()}/workflow/convert`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflow: workflowObj }),
-    })
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '')
-      log(`工作流转换失败：HTTP ${resp.status} ${text}`.trim())
-      return null
-    }
-    const data = await resp.json()
-    if (!data || typeof data !== 'object') return null
-    return data as WorkflowMap
-  } catch (err) {
-    log(`工作流转换失败：${(err as Error)?.message || String(err)}`)
-    return null
-  }
-}
-
-const safeJsonParse = (raw: string) => {
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-const loadPersistedState = () => {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return
-  const parsed = safeJsonParse(raw)
-  if (!parsed || typeof parsed !== 'object') return
-  const data = parsed as Partial<PersistedState>
-  if (typeof data.workflowJson === 'string') workflowJson.value = data.workflowJson
-  if (data.paramValues && typeof data.paramValues === 'object') {
-    persistedParamValues.value = data.paramValues as Record<string, EditableValue>
-  }
-  if (typeof data.simpleMode === 'boolean') simpleMode.value = data.simpleMode
-  if (typeof data.simplePrompt === 'string') simplePrompt.value = data.simplePrompt
-  if (typeof data.simpleWidth === 'number') simpleWidth.value = data.simpleWidth
-  if (typeof data.simpleHeight === 'number') simpleHeight.value = data.simpleHeight
-  if (typeof data.autoRandomSeed === 'boolean') autoRandomSeed.value = data.autoRandomSeed
-  if (data.albumSortOrder === 'asc' || data.albumSortOrder === 'desc') {
-    albumSortOrder.value = data.albumSortOrder
-  }
-}
-
-let persistTimer: ReturnType<typeof setTimeout> | null = null
-const schedulePersist = () => {
-  if (persistTimer) clearTimeout(persistTimer)
-  persistTimer = setTimeout(() => {
-    const paramValues = buildParamValueMap(paramFields.value)
-    persistedParamValues.value = paramValues
-    const payload: PersistedState = {
-      workflowJson: workflowJson.value,
-      paramValues,
-      simpleMode: simpleMode.value,
-      simplePrompt: simplePrompt.value,
-      simpleWidth: simpleWidth.value,
-      simpleHeight: simpleHeight.value,
-      autoRandomSeed: autoRandomSeed.value,
-      albumSortOrder: albumSortOrder.value,
-    }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-    } catch {
-      // Ignore storage errors (quota, private mode)
-    }
-  }, 400)
-}
-
-const isEditableValue = (value: unknown): value is EditableValue =>
-  typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-
-const buildEditableParams = (wf: WorkflowMap) => {
-  const fields: ParamField[] = []
-  for (const [nodeId, node] of Object.entries(wf || {})) {
-    if (!node?.inputs) continue
-    const nodeLabel = node._meta?.title || node.class_type || nodeId
-    for (const [inputKey, value] of Object.entries(node.inputs)) {
-      if (!isEditableValue(value)) continue
-      const inputType =
-        typeof value === 'string' ? 'string' : typeof value === 'number' ? 'number' : 'boolean'
-      fields.push({
-        id: `${nodeId}.${inputKey}`,
-        nodeId,
-        nodeLabel,
-        inputKey,
-        value,
-        inputType,
-      })
-    }
-  }
-  return fields
-}
-
-const buildParamValueMap = (fields: ParamField[]) => {
-  const map: Record<string, EditableValue> = {}
-  for (const field of fields) {
-    map[field.id] = field.value
-  }
-  return map
-}
-
-const applyParamValueMap = (fields: ParamField[], map: Record<string, EditableValue>) =>
-  fields.map((field) => {
-    if (!Object.prototype.hasOwnProperty.call(map, field.id)) return field
-    const mapped = map[field.id]
-    if (mapped === undefined) return field
-    return { ...field, value: mapped }
-  })
-
-const updateFieldsByKey = (
-  fields: ParamField[],
-  key: string,
-  value: EditableValue,
-  preferredNodes: string[] = [],
-) => {
-  let updated = false
-  const next = fields.map((field) => {
-    if (field.inputKey !== key) return field
-    if (preferredNodes.length && !preferredNodes.includes(field.nodeLabel)) return field
-    updated = true
-    return { ...field, value }
-  })
-  if (updated) return next
-  return fields.map((field) => (field.inputKey === key ? { ...field, value } : field))
-}
-
-const syncSimpleFromFields = (fields: ParamField[]) => {
-  const promptField = fields.find((f) => f.inputKey === 'text' && typeof f.value === 'string')
-  if (promptField) simplePrompt.value = String(promptField.value)
-
-  const widthField = fields.find((f) => f.inputKey === 'width' && typeof f.value === 'number')
-  const heightField = fields.find((f) => f.inputKey === 'height' && typeof f.value === 'number')
-  if (widthField) simpleWidth.value = Number(widthField.value)
-  if (heightField) simpleHeight.value = Number(heightField.value)
-}
-
-const applySimpleOverrides = () => {
-  const preferredPromptNodes = ['CLIPTextEncode', 'CLIPTextEncode (1)', 'CLIPTextEncode (2)']
-  let next = updateFieldsByKey(paramFields.value, 'text', simplePrompt.value, preferredPromptNodes)
-  next = updateFieldsByKey(next, 'width', simpleWidth.value, [
-    'EmptyLatentImage',
-    'EmptySD3LatentImage',
-  ])
-  next = updateFieldsByKey(next, 'height', simpleHeight.value, [
-    'EmptyLatentImage',
-    'EmptySD3LatentImage',
-  ])
-  paramFields.value = next
-}
-
-const ensureWsConnected = () => {
-  if (ws.value && ws.value.readyState === WebSocket.OPEN) return true
-  return connectWs()
-}
-
-const connectWs = () => {
-  const url = `${baseWs()}/ws?clientId=${encodeURIComponent(clientId.value)}`
-  try {
-    const socket = new WebSocket(url)
-    ws.value = socket
-
-    wsState.value = 'WS: 连接中...'
-    socket.onopen = () => {
-      wsState.value = 'WS: 已连接'
-      log(`WebSocket 已连接，clientId=${clientId.value}`)
-    }
-    socket.onclose = () => {
-      wsState.value = 'WS: 已断开'
-      log('WebSocket 已断开')
-    }
-    socket.onerror = () => {
-      wsState.value = 'WS: 错误'
-      log('WebSocket 出错（可能是后端地址/防火墙/CORS/混合内容）')
-    }
-
-    socket.onmessage = async (ev) => {
-      let msg: any
-      try {
-        msg = JSON.parse(ev.data)
-      } catch {
-        return
-      }
-      console.log('WS RAW MESSAGE:', msg)
-
-      if (msg.type === 'status') {
-        const q = msg.data?.status?.exec_info?.queue_remaining
-        if (typeof q === 'number') {
-          progressQueueRemaining.value = q
-          log(`队列剩余：${q}`)
-          if (isOutputDone.value && q === 0) isRunning.value = false
-        }
-        return
-      }
-
-      if (msg.type === 'progress') {
-        const v = msg.data?.value
-        const m = msg.data?.max
-        if (typeof v === 'number' && typeof m === 'number') {
-          progressValue.value = v
-          progressMax.value = m
-          progressStatus.value = `运行中：${v}/${m}`
-          log(`进度：${v}/${m}`)
-        }
-        return
-      }
-
-      if (msg.type === 'executed' || msg.type === 'execution_success') {
-        const pid = msg.data?.prompt_id || msg.prompt_id || lastPromptId.value
-        progressStatus.value = '执行完成'
-        isOutputDone.value = true
-        log(`执行完成（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
-        await tryFetchHistoryAndShow(pid)
-        return
-      }
-
-      if (msg.type === 'executing') {
-        const node = msg.data?.node
-        const pid = msg.data?.prompt_id || lastPromptId.value
-        if (node === null) {
-          progressNode.value = null
-          progressStatus.value = '执行结束'
-          isOutputDone.value = true
-          log(`执行结束信号（prompt_id=${pid || 'unknown'}），尝试拉取历史输出...`)
-          await tryFetchHistoryAndShow(pid)
-        } else {
-          progressNode.value = String(node)
-          progressStatus.value = `正在执行节点：${node}`
-          log(`正在执行节点：${node}`)
-        }
-        return
-      }
-
-      if (msg.data?.images?.length) {
-        for (const img of msg.data.images) await showImageFile(img)
-      }
-    }
-
-    return true
-  } catch (err) {
-    log(`WebSocket 连接失败：${(err as Error)?.message || String(err)}`)
-    return false
-  }
-}
-
-const disconnectWs = () => {
-  if (ws.value) ws.value.close()
-  ws.value = null
-  wsState.value = 'WS: 未连接'
-}
-
-const postPrompt = async (workflowObj: WorkflowMap) => {
-  const url = `${baseHttp()}/prompt`
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: workflowObj, client_id: clientId.value }),
-  })
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '')
-    throw new Error(`POST /api/prompt 失败：HTTP ${resp.status} ${text}`)
-  }
-  return await resp.json()
-}
-
-const interrupt = async () => {
-  const url = `${baseHttp()}/interrupt`
-  const resp = await fetch(url, { method: 'POST' })
-  if (!resp.ok) throw new Error(`POST /api/interrupt 失败：HTTP ${resp.status}`)
-}
-
-const getHistory = async (promptId: string) => {
-  const try1 = `${baseHttp()}/history/${encodeURIComponent(promptId)}`
-  let resp = await fetch(try1)
-  if (resp.ok) return await resp.json()
-
-  const try2 = `${baseHttp()}/history`
-  resp = await fetch(try2)
-  if (!resp.ok) throw new Error(`GET /api/history 失败：HTTP ${resp.status}`)
-  const all = await resp.json()
-  return all?.[promptId] ? { [promptId]: all[promptId] } : all
-}
-
-const showImageFile = async (file: ImageFile) => {
-  if (!file?.filename) return
-  const key = `${file.type || 'output'}|${file.subfolder || ''}|${file.filename}`
-  if (shownFiles.has(key)) return
-  shownFiles.add(key)
-
-  const url = `${baseHttp()}/view?filename=${encodeURIComponent(file.filename)}&subfolder=${encodeURIComponent(file.subfolder || '')}&type=${encodeURIComponent(file.type || 'output')}`
-  images.value = [{ src: url, alt: file.filename }, ...images.value]
-  log(`已展示图片：${file.filename}`)
-}
-
-const normalizeAlbumItems = (items: AlbumItem[]) =>
-  items.map((item) => ({
-    name: item.name,
-    url: item.url.startsWith('http') ? item.url : `${backendOrigin()}${item.url}`,
-  }))
-
-const fetchAlbum = async () => {
-  albumError.value = ''
-  try {
-    const resp = await fetch(`${baseHttp()}/album/list?order=${encodeURIComponent(albumSortOrder.value)}`)
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '')
-      albumError.value = `相册加载失败：HTTP ${resp.status} ${text}`.trim()
-      albumImages.value = []
-      return
-    }
-    const data = await resp.json()
-    if (Array.isArray(data)) {
-      albumImages.value = normalizeAlbumItems(data)
-    } else {
-      albumImages.value = []
-    }
-  } catch (err) {
-    albumError.value = `相册加载失败：${(err as Error)?.message || String(err)}`
-    albumImages.value = []
-  }
-}
-
-const tryFetchHistoryAndShow = async (promptId?: string | null) => {
-  if (!promptId) return
-
-  let hist: any
-  try {
-    hist = await getHistory(promptId)
-  } catch (err) {
-    log(`拉取 history 失败：${(err as Error)?.message || String(err)}`)
-    return
-  }
-
-  const entry = hist && hist[promptId] ? hist[promptId] : hist
-
-  const files: ImageFile[] = []
-  const seen = new Set<string>()
-
-  const walk = (x: any) => {
-    if (!x) return
-    if (Array.isArray(x)) {
-      x.forEach(walk)
-      return
-    }
-    if (typeof x !== 'object') return
-
-    if (typeof x.filename === 'string') {
-      const file = {
-        filename: x.filename,
-        subfolder: x.subfolder || '',
-        type: x.type || 'output',
-      }
-      const key = `${file.type}|${file.subfolder}|${file.filename}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        files.push(file)
-      }
-    }
-
-    Object.values(x).forEach(walk)
-  }
-
-  walk(entry)
-
-  if (files.length === 0) {
-    log('history 中未扫描到 filename 信息。已把原始 history 打到控制台，便于定位结构。')
-    console.log('RAW_HISTORY_ENTRY:', entry)
-    return
-  }
-
-  log(`从 history 扫描到 ${files.length} 个文件，开始展示...`)
-  for (const f of files) {
-    await showImageFile(f)
-  }
-  await fetchAlbum()
-}
-
-const cloneWorkflow = (value: WorkflowMap) => JSON.parse(JSON.stringify(value)) as WorkflowMap
-
-const buildWorkflowWithParams = () => {
-  if (!workflow.value) throw new Error('请先解析并加载 workflow')
-  const wf = cloneWorkflow(workflow.value)
-  for (const field of paramFields.value) {
-    const node = wf[field.nodeId]
-    if (!node?.inputs) continue
-    if (field.inputType === 'number') {
-      const next = Number(field.value)
-      if (!Number.isNaN(next)) node.inputs[field.inputKey] = next
-    } else if (field.inputType === 'boolean') {
-      node.inputs[field.inputKey] = Boolean(field.value)
-    } else {
-      node.inputs[field.inputKey] = String(field.value)
-    }
-  }
-  return wf
-}
-
-const randomizeSeedFields = () => {
-  if (!autoRandomSeed.value) return
-  let updated = false
-  const next = paramFields.value.map((field) => {
-    if (field.inputKey.trim().toLowerCase() !== 'seed') return field
-    const nextSeed = Math.floor(Math.random() * 2 ** 32)
-    updated = true
-    if (field.inputType === 'string') {
-      return { ...field, value: String(nextSeed) }
-    }
-    return { ...field, value: nextSeed }
-  })
-  if (updated) paramFields.value = next
-}
-
-const parseWorkflow = async (raw: string, notify: boolean) => {
-  const obj = safeJsonParse(raw)
-  if (!obj || typeof obj !== 'object') {
-    if (notify) alert('JSON 解析失败：请确认粘贴的是完整 workflow JSON')
-    return false
-  }
-  if (looksLikeWorkflowJson(obj) && !looksLikeApiPrompt(obj)) {
-    parseInfo.value = '检测到编辑器工作流，正在转换为 API 格式...'
-    const converted = await convertWorkflow(obj)
-    if (!converted) {
-      parseInfo.value = '转换失败：请检查后端日志或工作流内容'
-      return false
-    }
-    workflow.value = converted
-    const fields = buildEditableParams(workflow.value)
-    paramFields.value = applyParamValueMap(fields, persistedParamValues.value)
-    syncSimpleFromFields(paramFields.value)
-  } else if (looksLikeApiPrompt(obj)) {
-    workflow.value = obj as WorkflowMap
-    const fields = buildEditableParams(workflow.value)
-    paramFields.value = applyParamValueMap(fields, persistedParamValues.value)
-    syncSimpleFromFields(paramFields.value)
-  } else {
-    if (notify) alert('JSON 结构不符合 workflow 或 API prompt')
-    return false
-  }
-
-  parseInfo.value = `解析成功：发现 ${paramFields.value.length} 个可编辑字段。`
-  lastParsedRaw.value = raw
-
-  log('Workflow 已加载并解析节点。')
-  return true
-}
-
-const onParse = async () => {
-  const raw = workflowJson.value.trim()
-  if (!(await parseWorkflow(raw, true))) return
-}
-
-const deleteAlbumItem = async (item: AlbumItem) => {
-  const ok = confirm(`删除图片 "${item.name}"？此操作会删除磁盘文件。`)
-  if (!ok) return
-  try {
-    const resp = await fetch(`${baseHttp()}/album/file/${encodeURIComponent(item.name)}`, {
-      method: 'DELETE',
-    })
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '')
-      albumError.value = `删除失败：HTTP ${resp.status} ${text}`.trim()
-      return
-    }
-    albumImages.value = albumImages.value.filter((img) => img.name !== item.name)
-  } catch (err) {
-    albumError.value = `删除失败：${(err as Error)?.message || String(err)}`
-  }
-}
+runner.log(`clientId=${runner.clientId.value}`)
 
 const onClear = () => {
-  workflowJson.value = ''
-  parseInfo.value = ''
-  workflow.value = null
-  paramFields.value = []
-  images.value = []
-  shownFiles.clear()
-  lastParsedRaw.value = ''
-  progressValue.value = null
-  progressMax.value = null
-  progressNode.value = null
-  progressQueueRemaining.value = null
-  progressStatus.value = '等待进度...'
-  isRunning.value = false
-  isOutputDone.value = false
-  log('已清空。')
-  localStorage.removeItem(STORAGE_KEY)
+  workflow.clearWorkflowState()
+  runner.resetRunnerState()
+  runner.log('已清空。')
+  persist.clearPersistedState()
 }
 
 const onRun = async () => {
   try {
-    isRunning.value = true
-    isOutputDone.value = false
-    randomizeSeedFields()
-    images.value = []
-    shownFiles.clear()
-    progressValue.value = null
-    progressMax.value = null
-    progressNode.value = null
-    progressQueueRemaining.value = null
-    progressStatus.value = '已提交，等待进度...'
+    runner.prepareForRun()
+    workflow.randomizeSeedFields()
 
-    if (!workflow.value) {
+    if (!workflow.workflow.value) {
       alert('请先粘贴并解析 workflow JSON')
       return
     }
 
-    ensureWsConnected()
+    runner.ensureWsConnected()
 
-    if (simpleMode.value) applySimpleOverrides()
-    const wf = buildWorkflowWithParams()
-    log('正在提交任务到 /api/prompt ...')
-    const res = await postPrompt(wf)
+    if (workflow.simpleMode.value) workflow.applySimpleOverrides()
+    const wf = workflow.buildWorkflowWithParams()
+    runner.log('正在提交任务到 /api/prompt ...')
+    const pid = await runner.sendPrompt(wf)
 
-    const pid = res?.prompt_id
-    lastPromptId.value = pid || null
-
-    log(`提交成功：prompt_id=${pid || 'unknown'}；clientId=${clientId.value}`)
-    log('等待 WebSocket 进度/完成消息...（如果没有消息，将在完成后手动拉 history）')
+    runner.log(`提交成功：prompt_id=${pid || 'unknown'}；clientId=${runner.clientId.value}`)
+    runner.log('等待 WebSocket 进度/完成消息...（如果没有消息，将在完成后手动拉 history）')
 
     if (pid) {
-      setTimeout(() => tryFetchHistoryAndShow(pid), 2000)
-      setTimeout(() => tryFetchHistoryAndShow(pid), 5000)
-      setTimeout(() => tryFetchHistoryAndShow(pid), 9000)
-      setTimeout(() => tryFetchHistoryAndShow(pid), 15000)
+      setTimeout(() => runner.tryFetchHistoryAndShow(pid), 2000)
+      setTimeout(() => runner.tryFetchHistoryAndShow(pid), 5000)
+      setTimeout(() => runner.tryFetchHistoryAndShow(pid), 9000)
+      setTimeout(() => runner.tryFetchHistoryAndShow(pid), 15000)
     }
   } catch (err) {
-    log(`运行失败：${(err as Error)?.message || String(err)}`)
+    runner.log(`运行失败：${(err as Error)?.message || String(err)}`)
     alert('运行失败，查看日志区获取详情。常见原因：后端代理/CORS/混合内容/防火墙。')
-    isRunning.value = false
-    isOutputDone.value = false
+    runner.isRunning.value = false
+    runner.isOutputDone.value = false
   }
 }
 
 const onStop = async () => {
   try {
-    await interrupt()
-    log('已发送 Interrupt。')
-    isRunning.value = false
-    isOutputDone.value = false
+    await runner.sendInterrupt()
+    runner.log('已发送 Interrupt。')
+    runner.isRunning.value = false
+    runner.isOutputDone.value = false
   } catch (err) {
-    log(`Interrupt 失败：${(err as Error)?.message || String(err)}`)
-  }
-}
-
-log(`clientId=${clientId.value}`)
-
-const fetchBackendConfig = async () => {
-  try {
-    const resp = await fetch(`${baseHttp()}/config`)
-    if (!resp.ok) return
-    const data = await resp.json()
-    if (typeof data?.pcIp === 'string') pcIp.value = data.pcIp
-    if (typeof data?.pcPort === 'string') pcPort.value = data.pcPort
-  } catch {
-    // Ignore config load failures
+    runner.log(`Interrupt 失败：${(err as Error)?.message || String(err)}`)
   }
 }
 
 onMounted(async () => {
-  loadPersistedState()
-  await fetchBackendConfig()
-  await fetchAlbum()
-  connectWs()
-  await refreshComfyHealth()
-  comfyTimer = setInterval(refreshComfyHealth, 10000)
-})
-
-watch(workflowJson, (next) => {
-  const raw = next.trim()
-  if (!raw) return
-  if (raw === lastParsedRaw.value) return
-  if (parseTimer) clearTimeout(parseTimer)
-  parseTimer = setTimeout(() => {
-    if (raw !== workflowJson.value.trim()) return
-    void parseWorkflow(raw, false)
-  }, 300)
-})
-
-watch(
-  [workflowJson, paramFields, simpleMode, simplePrompt, simpleWidth, simpleHeight, autoRandomSeed, albumSortOrder],
-  () => {
-    schedulePersist()
-  },
-  { deep: true },
-)
-
-onBeforeUnmount(() => {
-  if (ws.value) ws.value.close()
-  if (comfyTimer) clearInterval(comfyTimer)
-})
-
-watch([pcIp, pcPort], () => {
-  refreshComfyHealth()
-})
-
-watch(simpleMode, (enabled) => {
-  if (enabled) syncSimpleFromFields(paramFields.value)
+  persist.loadPersistedState()
+  await connection.fetchBackendConfig()
+  await album.fetchAlbum()
+  runner.connectWs()
+  await connection.refreshComfyHealth()
+  connection.startHealthTimer()
 })
 </script>
 
