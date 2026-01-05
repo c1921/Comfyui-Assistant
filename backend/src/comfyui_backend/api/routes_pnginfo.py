@@ -1,11 +1,10 @@
-import json
-from pathlib import Path
+﻿import json
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
 
-from .routes_album import _get_album_dir
+from .routes_album import _get_album_dir, _resolve_album_target
 
 router = APIRouter()
 
@@ -21,7 +20,7 @@ def _parse_json_field(key: str, value: Any) -> Optional[Dict[str, Any]]:
         try:
             parsed = json.loads(value)
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=400, detail=f"{key} JSON 解析失败：{exc}")
+            raise HTTPException(status_code=400, detail=f"{key} JSON parse failed: {exc}")
         if isinstance(parsed, dict):
             return parsed
         return parsed  # allow non-dict JSON payloads
@@ -37,7 +36,7 @@ def _extract_pnginfo(image: Image.Image) -> Dict[str, Any]:
     prompt = _parse_json_field("prompt", prompt_raw)
 
     if workflow is None and prompt is None:
-        raise HTTPException(status_code=400, detail="pnginfo 未发现 workflow 或 prompt")
+        raise HTTPException(status_code=400, detail="pnginfo missing workflow or prompt")
 
     source = "workflow" if workflow is not None else "prompt"
     payload = workflow if source == "workflow" else prompt
@@ -54,30 +53,26 @@ def _extract_pnginfo(image: Image.Image) -> Dict[str, Any]:
 async def parse_pnginfo_upload(file: UploadFile = File(...)):
     filename = file.filename or ""
     if not filename.lower().endswith(".png"):
-        raise HTTPException(status_code=400, detail="仅支持 PNG 图片")
+        raise HTTPException(status_code=400, detail="only PNG files are supported")
     try:
         with Image.open(file.file) as image:
             return _extract_pnginfo(image)
     except UnidentifiedImageError:
-        raise HTTPException(status_code=400, detail="无法识别图片文件")
+        raise HTTPException(status_code=400, detail="unrecognized image file")
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"读取图片失败：{exc}")
+        raise HTTPException(status_code=400, detail=f"failed to read image: {exc}")
 
 
-@router.get("/api/workflow/pnginfo/album/{filename}")
+@router.get("/api/workflow/pnginfo/album/{filename:path}")
 async def parse_pnginfo_from_album(filename: str):
-    if not filename or Path(filename).name != filename:
-        raise HTTPException(status_code=400, detail="非法文件名")
     album_dir = _get_album_dir()
-    target = (album_dir / filename).resolve()
-    if album_dir not in target.parents and target != album_dir:
-        raise HTTPException(status_code=400, detail="非法路径")
+    target = _resolve_album_target(filename, album_dir)
     if not target.is_file() or target.suffix.lower() != ".png":
-        raise HTTPException(status_code=404, detail="PNG 图片不存在")
+        raise HTTPException(status_code=404, detail="PNG image not found")
     try:
         with Image.open(target) as image:
             return _extract_pnginfo(image)
     except UnidentifiedImageError:
-        raise HTTPException(status_code=400, detail="无法识别图片文件")
+        raise HTTPException(status_code=400, detail="unrecognized image file")
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"读取图片失败：{exc}")
+        raise HTTPException(status_code=400, detail=f"failed to read image: {exc}")

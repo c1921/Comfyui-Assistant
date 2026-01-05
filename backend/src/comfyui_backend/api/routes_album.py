@@ -1,4 +1,5 @@
-from pathlib import Path
+﻿from pathlib import Path
+from urllib.parse import quote
 from typing import List, Literal
 
 from fastapi import APIRouter, HTTPException
@@ -30,10 +31,10 @@ def _get_album_dir() -> Path:
     cfg = load_ui_config()
     album_path = (cfg.albumPath or "").strip()
     if not album_path:
-        raise HTTPException(status_code=400, detail="albumPath 未配置")
+        raise HTTPException(status_code=400, detail="albumPath not configured")
     album_dir = Path(album_path).expanduser().resolve()
     if not album_dir.exists() or not album_dir.is_dir():
-        raise HTTPException(status_code=400, detail="albumPath 不是有效目录")
+        raise HTTPException(status_code=400, detail="albumPath is not a valid directory")
     return album_dir
 
 
@@ -41,43 +42,52 @@ def _is_allowed_image(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in ALLOWED_IMAGE_SUFFIXES
 
 
+def _resolve_album_target(filename: str, album_dir: Path) -> Path:
+    if not filename:
+        raise HTTPException(status_code=400, detail="invalid filename")
+    candidate = Path(filename)
+    if candidate.is_absolute() or candidate.drive or candidate.root:
+        raise HTTPException(status_code=400, detail="invalid path")
+    target = (album_dir / candidate).resolve()
+    if album_dir not in target.parents and target != album_dir:
+        raise HTTPException(status_code=400, detail="invalid path")
+    return target
+
+
 @router.get("/api/album/list", response_model=List[AlbumItem])
 async def list_album_images(order: Literal["asc", "desc"] = "desc") -> List[AlbumItem]:
     album_dir = _get_album_dir()
     items: List[AlbumItem] = []
     reverse = order == "desc"
-    for entry in sorted(album_dir.iterdir(), key=lambda p: p.name.lower(), reverse=reverse):
-        if not _is_allowed_image(entry):
-            continue
-        items.append(AlbumItem(name=entry.name, url=f"/api/album/file/{entry.name}"))
+    candidates = [p for p in album_dir.rglob("*") if _is_allowed_image(p)]
+    for entry in sorted(candidates, key=lambda p: p.relative_to(album_dir).as_posix().lower(), reverse=reverse):
+        rel_path = entry.relative_to(album_dir).as_posix()
+        items.append(
+            AlbumItem(
+                name=rel_path,
+                url=f"/api/album/file/{quote(rel_path)}",
+            )
+        )
     return items
 
 
-@router.get("/api/album/file/{filename}")
+@router.get("/api/album/file/{filename:path}")
 async def get_album_image(filename: str) -> FileResponse:
-    if not filename or Path(filename).name != filename:
-        raise HTTPException(status_code=400, detail="非法文件名")
     album_dir = _get_album_dir()
-    target = (album_dir / filename).resolve()
-    if album_dir not in target.parents and target != album_dir:
-        raise HTTPException(status_code=400, detail="非法路径")
+    target = _resolve_album_target(filename, album_dir)
     if not _is_allowed_image(target):
-        raise HTTPException(status_code=404, detail="图片不存在")
+        raise HTTPException(status_code=404, detail="image not found")
     return FileResponse(target)
 
 
-@router.delete("/api/album/file/{filename}")
+@router.delete("/api/album/file/{filename:path}")
 async def delete_album_image(filename: str):
-    if not filename or Path(filename).name != filename:
-        raise HTTPException(status_code=400, detail="非法文件名")
     album_dir = _get_album_dir()
-    target = (album_dir / filename).resolve()
-    if album_dir not in target.parents and target != album_dir:
-        raise HTTPException(status_code=400, detail="非法路径")
+    target = _resolve_album_target(filename, album_dir)
     if not _is_allowed_image(target):
-        raise HTTPException(status_code=404, detail="图片不存在")
+        raise HTTPException(status_code=404, detail="image not found")
     try:
         target.unlink()
     except Exception:
-        raise HTTPException(status_code=500, detail="删除失败")
+        raise HTTPException(status_code=500, detail="delete failed")
     return {"status": "ok"}

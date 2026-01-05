@@ -52,8 +52,15 @@ export const getAlbum = async (baseHttp: string, order: 'asc' | 'desc') => {
   return (await resp.json()) as AlbumItem[]
 }
 
+const encodePath = (value: string) =>
+  value
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/')
+
 export const deleteAlbumItem = async (baseHttp: string, name: string) => {
-  const resp = await fetch(`${baseHttp}/album/file/${encodeURIComponent(name)}`, {
+  const resp = await fetch(`${baseHttp}/album/file/${encodePath(name)}`, {
     method: 'DELETE',
   })
   if (!resp.ok) {
@@ -98,7 +105,7 @@ export const parsePngInfoUpload = async (baseHttp: string, file: File) => {
 }
 
 export const parsePngInfoAlbum = async (baseHttp: string, filename: string) => {
-  const resp = await fetch(`${baseHttp}/workflow/pnginfo/album/${encodeURIComponent(filename)}`)
+  const resp = await fetch(`${baseHttp}/workflow/pnginfo/album/${encodePath(filename)}`)
   if (!resp.ok) {
     const text = await resp.text().catch(() => '')
     throw new Error(`PNG 解析失败：HTTP ${resp.status} ${text}`.trim())

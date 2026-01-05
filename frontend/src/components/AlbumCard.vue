@@ -1,4 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+
 interface AlbumItem {
   name: string
   url: string
@@ -16,12 +18,62 @@ const emit = defineEmits<{
   (e: 'update:sortOrder', value: 'asc' | 'desc'): void
 }>()
 
+type FolderOption = {
+  value: string
+  label: string
+}
+
+const selectedFolder = ref('')
+
 const onSortChange = (ev: Event) => {
   const value = (ev.target as HTMLSelectElement).value === 'asc' ? 'asc' : 'desc'
   emit('update:sortOrder', value)
   emit('refresh')
 }
 const onDeleteClick = (item: AlbumItem) => emit('delete', item)
+
+const getFolderKey = (name: string) => {
+  const normalized = name.replace(/\\/g, '/')
+  const idx = normalized.lastIndexOf('/')
+  return idx === -1 ? '' : normalized.slice(0, idx)
+}
+
+const folderOptions = computed<FolderOption[]>(() => {
+  const counts = new Map<string, number>()
+  for (const item of props.items) {
+    const key = getFolderKey(item.name)
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({
+      value,
+      label: `${value || '根目录'}（${count}）`,
+    }))
+    .sort((a, b) => {
+      if (a.value === '' && b.value !== '') return -1
+      if (a.value !== '' && b.value === '') return 1
+      return a.value.localeCompare(b.value)
+    })
+})
+
+watch(
+  folderOptions,
+  (options) => {
+    if (!options.length) {
+      selectedFolder.value = ''
+      return
+    }
+    if (!options.some((opt) => opt.value === selectedFolder.value)) {
+      const first = options[0]
+      if (first) selectedFolder.value = first.value
+    }
+  },
+  { immediate: true },
+)
+
+const filteredItems = computed(() =>
+  props.items.filter((item) => getFolderKey(item.name) === selectedFolder.value),
+)
 </script>
 
 <template>
@@ -29,6 +81,15 @@ const onDeleteClick = (item: AlbumItem) => emit('delete', item)
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-base font-semibold">相册</h3>
       <div class="flex items-center gap-2">
+        <select
+          class="select select-xs select-bordered"
+          :value="selectedFolder"
+          @change="selectedFolder = ($event.target as HTMLSelectElement).value"
+        >
+          <option v-for="option in folderOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
         <select class="select select-xs select-bordered" :value="props.sortOrder" @change="onSortChange">
           <option value="desc">倒序</option>
           <option value="asc">正序</option>
@@ -44,7 +105,7 @@ const onDeleteClick = (item: AlbumItem) => emit('delete', item)
     </div>
     <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <div
-        v-for="item in props.items"
+        v-for="item in filteredItems"
         :key="item.url"
         class="group overflow-hidden rounded-lg border border-base-200 shadow-sm"
       >
