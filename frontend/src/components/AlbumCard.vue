@@ -77,7 +77,7 @@ const filteredItems = computed(() =>
 </script>
 
 <template>
-  <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+  <div class="rounded-xl bg-base-100 p-4">
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-base font-semibold">相册</h3>
       <div class="flex items-center gap-2">
@@ -107,7 +107,7 @@ const filteredItems = computed(() =>
       <div
         v-for="item in filteredItems"
         :key="item.url"
-        class="group overflow-hidden rounded-lg border border-base-200 shadow-sm"
+        class="group overflow-hidden rounded-lg border border-base-200"
       >
         <div class="relative">
           <img
@@ -117,7 +117,7 @@ const filteredItems = computed(() =>
             loading="lazy"
           />
           <button
-            class="btn btn-xs btn-error absolute right-2 top-2 hidden shadow-sm opacity-0 transition-opacity sm:inline-flex sm:group-hover:opacity-100"
+            class="btn btn-xs btn-error absolute right-2 top-2 hidden opacity-0 transition-opacity sm:inline-flex sm:group-hover:opacity-100"
             type="button"
             @click="onDeleteClick(item)"
             aria-label="删除图片"

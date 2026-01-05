@@ -22,7 +22,7 @@ const percent = computed(() => {
     <div class="h-24"></div>
     <div class="pointer-events-none fixed left-0 right-0 top-4 z-20 px-4">
       <div class="mx-auto w-full max-w-3xl pointer-events-auto">
-        <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+        <div class="rounded-xl bg-base-300 p-4">
           <div class="mb-2 flex flex-wrap gap-3 text-xs text-base-content/70">
             <span>状态：{{ props.statusText || '等待进度...' }}</span>
             <span v-if="props.queueRemaining !== null">队列剩余：{{ props.queueRemaining }}</span>

@@ -54,24 +54,28 @@ export const usePersist = (options: PersistOptions) => {
   const schedulePersist = () => {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(() => {
-      const paramValues = buildParamValueMap(paramFields.value)
-      persistedParamValues.value = paramValues
-      const payload: PersistedState = {
-        workflowJson: workflowJson.value,
-        paramValues,
-        simpleMode: simpleMode.value,
-        simplePrompt: simplePrompt.value,
-        simpleWidth: simpleWidth.value,
-        simpleHeight: simpleHeight.value,
-        autoRandomSeed: autoRandomSeed.value,
-        albumSortOrder: albumSortOrder.value,
-      }
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-      } catch {
-        // Ignore storage errors (quota, private mode)
-      }
+      persistNow()
     }, 400)
+  }
+
+  const persistNow = () => {
+    const paramValues = buildParamValueMap(paramFields.value)
+    persistedParamValues.value = paramValues
+    const payload: PersistedState = {
+      workflowJson: workflowJson.value,
+      paramValues,
+      simpleMode: simpleMode.value,
+      simplePrompt: simplePrompt.value,
+      simpleWidth: simpleWidth.value,
+      simpleHeight: simpleHeight.value,
+      autoRandomSeed: autoRandomSeed.value,
+      albumSortOrder: albumSortOrder.value,
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    } catch {
+      // Ignore storage errors (quota, private mode)
+    }
   }
 
   const clearPersistedState = () => {
@@ -88,6 +92,7 @@ export const usePersist = (options: PersistOptions) => {
 
   return {
     loadPersistedState,
+    persistNow,
     clearPersistedState,
   }
 }

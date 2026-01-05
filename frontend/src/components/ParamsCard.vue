@@ -50,6 +50,42 @@ const updateFieldValue = (id: string, value: string | number | boolean) => {
   emit('update:fields', next)
 }
 
+const coerceNumber = (raw: string, fallback: number) => {
+  const next = Number(raw)
+  return Number.isFinite(next) ? next : fallback
+}
+
+const getFieldNumber = (field: ParamField) => {
+  const next = Number(field.value)
+  return Number.isFinite(next) ? next : 0
+}
+
+const getStepForField = (field: ParamField) =>
+  field.inputKey.trim().toLowerCase() === 'denoise' ? 0.1 : 1
+
+const roundStep = (value: number, step: number) => {
+  if (step === 1) return value
+  return Math.round(value * 10) / 10
+}
+
+const onNumberDecrement = (event: Event, field: ParamField) => {
+  event.preventDefault()
+  if ('stopImmediatePropagation' in event) {
+    ;(event as Event).stopImmediatePropagation()
+  }
+  const step = getStepForField(field)
+  updateFieldValue(field.id, roundStep(getFieldNumber(field) - step, step))
+}
+
+const onNumberIncrement = (event: Event, field: ParamField) => {
+  event.preventDefault()
+  if ('stopImmediatePropagation' in event) {
+    ;(event as Event).stopImmediatePropagation()
+  }
+  const step = getStepForField(field)
+  updateFieldValue(field.id, roundStep(getFieldNumber(field) + step, step))
+}
+
 const asTextarea = (value: unknown) => {
   if (typeof value !== 'string') return false
   return value.length > 80 || value.includes('\n')
@@ -67,7 +103,7 @@ const onPresetChange = (ev: Event) => {
 </script>
 
 <template>
-  <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+  <div class="rounded-xl bg-base-100 p-4">
     <div class="mb-2 flex items-center justify-between gap-3">
       <h3 class="text-base font-semibold">参数设置</h3>
       <label class="inline-flex items-center gap-2 text-xs text-base-content/70">
@@ -148,15 +184,56 @@ const onPresetChange = (ev: Event) => {
           </label>
           <div v-else class="flex flex-wrap items-center gap-2 text-sm text-base-content/80">
             <span>{{ field.inputKey }}：</span>
-            <input
+            <div
               v-if="field.inputType === 'number'"
-              type="number"
-              class="input input-bordered input-sm w-32 sm:w-44"
-              :value="field.value"
-              @input="
-                updateFieldValue(field.id, Number(($event.target as HTMLInputElement).value))
-              "
-            />
+              class="max-w-sm"
+              data-input-number
+            >
+              <div class="input px-0">
+                <span class="border-base-content/25 border-e ps-0">
+                  <button
+                    type="button"
+                    class="flex size-9.5 items-center justify-center"
+                    aria-label="Decrement button"
+                    data-input-number-decrement
+                    @click="onNumberDecrement($event, field)"
+                  >
+                    <span class="icon-[tabler--minus] size-3.5 shrink-0"></span>
+                  </button>
+                </span>
+                <input
+                  class="px-3"
+                  type="text"
+                  :value="String(field.value)"
+                  :id="`number-input-${field.id}`"
+                  aria-label="Number input"
+                  data-input-number-input
+                  @input="
+                    updateFieldValue(
+                      field.id,
+                      coerceNumber(($event.target as HTMLInputElement).value, Number(field.value)),
+                    )
+                  "
+                  @change="
+                    updateFieldValue(
+                      field.id,
+                      coerceNumber(($event.target as HTMLInputElement).value, Number(field.value)),
+                    )
+                  "
+                />
+                <span class="border-base-content/25 border-s pe-0">
+                  <button
+                    type="button"
+                    class="flex size-9.5 items-center justify-center"
+                    aria-label="Increment button"
+                    data-input-number-increment
+                    @click="onNumberIncrement($event, field)"
+                  >
+                    <span class="icon-[tabler--plus] size-3.5 shrink-0"></span>
+                  </button>
+                </span>
+              </div>
+            </div>
             <textarea
               v-else-if="asTextarea(field.value)"
               class="textarea textarea-bordered textarea-sm w-full max-w-130"

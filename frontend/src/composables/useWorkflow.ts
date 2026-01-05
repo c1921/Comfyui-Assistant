@@ -4,6 +4,7 @@ import { convertWorkflow } from '../services/api'
 import {
   applyParamValueMap,
   buildEditableParams,
+  buildParamValueMap,
   cloneWorkflow,
   looksLikeApiPrompt,
   looksLikeWorkflowJson,
@@ -93,6 +94,9 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
         workflow.value = converted
         const fields = buildEditableParams(workflow.value)
         paramFields.value = applyPersisted ? applyParamValueMap(fields, persistedParamValues.value) : fields
+        if (!applyPersisted) {
+          persistedParamValues.value = buildParamValueMap(paramFields.value)
+        }
         syncSimpleFromFields(paramFields.value)
       } catch (err) {
         parseInfo.value = '转换失败：请检查后端日志或工作流内容'
@@ -103,6 +107,9 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
       workflow.value = obj as WorkflowMap
       const fields = buildEditableParams(workflow.value)
       paramFields.value = applyPersisted ? applyParamValueMap(fields, persistedParamValues.value) : fields
+      if (!applyPersisted) {
+        persistedParamValues.value = buildParamValueMap(paramFields.value)
+      }
       syncSimpleFromFields(paramFields.value)
     } else {
       if (notify) alert('JSON 结构不符合 workflow 或 API prompt')
@@ -118,7 +125,7 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
 
   const onParse = async () => {
     const raw = workflowJson.value.trim()
-    if (!(await parseWorkflow(raw, true, false))) return
+    return await parseWorkflow(raw, true, false)
   }
 
   const buildWorkflowWithParams = () => {

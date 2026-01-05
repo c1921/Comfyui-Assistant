@@ -125,7 +125,7 @@ onBeforeUnmount(() => {
 <template>
   <button
     ref="btnRef"
-    class="btn btn-circle btn-primary fixed z-20 shadow-lg select-none touch-none"
+    class="btn btn-circle btn-primary fixed z-20 select-none touch-none"
     type="button"
     :style="posReady ? { left: `${pos.x}px`, top: `${pos.y}px` } : undefined"
     @click="onClick"

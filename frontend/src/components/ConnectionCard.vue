@@ -7,7 +7,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+  <div class="rounded-xl bg-base-100 p-4">
     <div class="flex flex-wrap items-center gap-3">
       <span class="text-sm text-base-content/80">
         后端地址（配置文件）：<strong class="font-semibold text-base-content">{{ props.backendOrigin }}</strong>

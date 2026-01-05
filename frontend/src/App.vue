@@ -76,7 +76,7 @@ const {
   sizePresets,
   autoRandomSeed,
 } = workflow
-const { onParse } = workflow
+const { onParse: onParseWorkflow } = workflow
 const { fetchAlbum, deleteAlbumItem } = album
 const { connectWs, disconnectWs } = runner
 
@@ -90,6 +90,12 @@ const applyPngInfoPayload = async (payload: unknown) => {
   if (!ok) {
     throw new Error('PNG parse result is not a workflow/prompt')
   }
+  persist.persistNow()
+}
+
+const onParse = async () => {
+  const ok = await onParseWorkflow()
+  if (ok) persist.persistNow()
 }
 
 const onParseImageFile = async (file: File) => {
@@ -191,8 +197,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col">
-    <div class="flex-1">
+  <div class="flex min-h-screen flex-col bg-base-200">
+    <div class="flex-1 mx-3">
       <ProgressCard
         :value="progressValue"
         :max="progressMax"

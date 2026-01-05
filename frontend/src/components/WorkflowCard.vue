@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import type { AlbumItem } from '../types/app'
 
 const props = defineProps<{
@@ -28,6 +28,7 @@ const onFileChange = (event: Event) => {
   reader.onload = () => {
     const text = typeof reader.result === 'string' ? reader.result : ''
     emit('update:workflowJson', text)
+    void nextTick(() => emit('parse'))
   }
   reader.onerror = () => {
     alert('读取 JSON 文件失败，请重试。')
@@ -51,7 +52,7 @@ const onParseAlbum = () => {
 </script>
 
 <template>
-  <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+  <div class="rounded-xl bg-base-100 p-4">
     <h3 class="mb-2 text-base font-semibold">粘贴或上传 Workflow JSON</h3>
     <textarea
       :value="props.workflowJson"
