@@ -23,6 +23,7 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
   const parseInfo = ref('')
   const lastParsedRaw = ref('')
   let parseTimer: ReturnType<typeof setTimeout> | null = null
+  let autoParseEnabled = true
 
   const paramFields = ref<ParamField[]>([])
   const simpleMode = ref(false)
@@ -79,7 +80,7 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
     if (updated) paramFields.value = next
   }
 
-  const parseWorkflow = async (raw: string, notify: boolean) => {
+  const parseWorkflow = async (raw: string, notify: boolean, applyPersisted = true) => {
     const obj = safeJsonParse(raw)
     if (!obj || typeof obj !== 'object') {
       if (notify) alert('JSON 解析失败：请确认粘贴的是完整 workflow JSON')
@@ -91,7 +92,7 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
         const converted = await convertWorkflow(baseHttp(), obj)
         workflow.value = converted
         const fields = buildEditableParams(workflow.value)
-        paramFields.value = applyParamValueMap(fields, persistedParamValues.value)
+        paramFields.value = applyPersisted ? applyParamValueMap(fields, persistedParamValues.value) : fields
         syncSimpleFromFields(paramFields.value)
       } catch (err) {
         parseInfo.value = '转换失败：请检查后端日志或工作流内容'
@@ -101,7 +102,7 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
     } else if (looksLikeApiPrompt(obj)) {
       workflow.value = obj as WorkflowMap
       const fields = buildEditableParams(workflow.value)
-      paramFields.value = applyParamValueMap(fields, persistedParamValues.value)
+      paramFields.value = applyPersisted ? applyParamValueMap(fields, persistedParamValues.value) : fields
       syncSimpleFromFields(paramFields.value)
     } else {
       if (notify) alert('JSON 结构不符合 workflow 或 API prompt')
@@ -117,7 +118,7 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
 
   const onParse = async () => {
     const raw = workflowJson.value.trim()
-    if (!(await parseWorkflow(raw, true))) return
+    if (!(await parseWorkflow(raw, true, false))) return
   }
 
   const buildWorkflowWithParams = () => {
@@ -147,13 +148,14 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
   }
 
   watch(workflowJson, (next) => {
+    if (!autoParseEnabled) return
     const raw = next.trim()
     if (!raw) return
     if (raw === lastParsedRaw.value) return
     if (parseTimer) clearTimeout(parseTimer)
     parseTimer = setTimeout(() => {
       if (raw !== workflowJson.value.trim()) return
-      void parseWorkflow(raw, false)
+      void parseWorkflow(raw, false, false)
     }, 300)
   })
 
@@ -178,5 +180,8 @@ export const useWorkflow = ({ baseHttp, log, persistedParamValues }: WorkflowOpt
     applySimpleOverrides,
     randomizeSeedFields,
     clearWorkflowState,
+    setAutoParseEnabled: (enabled: boolean) => {
+      autoParseEnabled = enabled
+    },
   }
 }

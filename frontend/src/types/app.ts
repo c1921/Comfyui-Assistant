@@ -54,3 +54,11 @@ export type SizePreset = {
   width: number
   height: number
 }
+
+export type PngInfoResult = {
+  source: 'workflow' | 'prompt'
+  payload: unknown
+  workflow?: unknown
+  prompt?: unknown
+  keys?: string[]
+}

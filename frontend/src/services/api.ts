@@ -1,4 +1,4 @@
-import type { AlbumItem, ImageFile, WorkflowJson, WorkflowMap } from '../types/app'
+import type { AlbumItem, ImageFile, PngInfoResult, WorkflowJson, WorkflowMap } from '../types/app'
 
 export const convertWorkflow = async (baseHttp: string, workflowObj: WorkflowJson) => {
   const resp = await fetch(`${baseHttp}/workflow/convert`, {
@@ -81,4 +81,27 @@ export const buildViewUrl = (baseHttp: string, file: ImageFile) => {
   const subfolder = encodeURIComponent(file.subfolder || '')
   const type = encodeURIComponent(file.type || 'output')
   return `${baseHttp}/view?filename=${filename}&subfolder=${subfolder}&type=${type}`
+}
+
+export const parsePngInfoUpload = async (baseHttp: string, file: File) => {
+  const form = new FormData()
+  form.append('file', file, file.name)
+  const resp = await fetch(`${baseHttp}/workflow/pnginfo`, {
+    method: 'POST',
+    body: form,
+  })
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`PNG 解析失败：HTTP ${resp.status} ${text}`.trim())
+  }
+  return (await resp.json()) as PngInfoResult
+}
+
+export const parsePngInfoAlbum = async (baseHttp: string, filename: string) => {
+  const resp = await fetch(`${baseHttp}/workflow/pnginfo/album/${encodeURIComponent(filename)}`)
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`PNG 解析失败：HTTP ${resp.status} ${text}`.trim())
+  }
+  return (await resp.json()) as PngInfoResult
 }

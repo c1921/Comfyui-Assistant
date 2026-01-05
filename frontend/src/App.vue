@@ -14,6 +14,7 @@ import { useConnection } from './composables/useConnection'
 import { usePersist } from './composables/usePersist'
 import { useRunner } from './composables/useRunner'
 import { useWorkflow } from './composables/useWorkflow'
+import { parsePngInfoAlbum, parsePngInfoUpload } from './services/api'
 import type { EditableValue } from './types/app'
 
 onMounted(() => {
@@ -21,6 +22,8 @@ onMounted(() => {
 })
 
 const persistedParamValues = ref<Record<string, EditableValue>>({})
+const imageParseInfo = ref('')
+const imageParseLoading = ref(false)
 
 const connection = useConnection()
 const album = useAlbum({
@@ -77,6 +80,47 @@ const { onParse } = workflow
 const { fetchAlbum, deleteAlbumItem } = album
 const { connectWs, disconnectWs } = runner
 
+const applyPngInfoPayload = async (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('PNG missing workflow/prompt')
+  }
+  const raw = JSON.stringify(payload, null, 2)
+  workflow.workflowJson.value = raw
+  const ok = await workflow.parseWorkflow(raw, false, false)
+  if (!ok) {
+    throw new Error('PNG parse result is not a workflow/prompt')
+  }
+}
+
+const onParseImageFile = async (file: File) => {
+  imageParseInfo.value = 'Parsing PNG...'
+  imageParseLoading.value = true
+  try {
+    const data = await parsePngInfoUpload(connection.baseHttp.value, file)
+    await applyPngInfoPayload(data.payload ?? data.workflow ?? data.prompt)
+    imageParseInfo.value = `PNG parsed (source: ${data.source})`
+  } catch (err) {
+    imageParseInfo.value = `PNG parse failed: ${(err as Error)?.message || String(err)}`
+  } finally {
+    imageParseLoading.value = false
+  }
+}
+
+const onParseImageAlbum = async (filename: string) => {
+  if (!filename) return
+  imageParseInfo.value = 'Parsing PNG...'
+  imageParseLoading.value = true
+  try {
+    const data = await parsePngInfoAlbum(connection.baseHttp.value, filename)
+    await applyPngInfoPayload(data.payload ?? data.workflow ?? data.prompt)
+    imageParseInfo.value = `PNG parsed (source: ${data.source})`
+  } catch (err) {
+    imageParseInfo.value = `PNG parse failed: ${(err as Error)?.message || String(err)}`
+  } finally {
+    imageParseLoading.value = false
+  }
+}
+
 runner.log(`clientId=${runner.clientId.value}`)
 
 const onClear = () => {
@@ -123,16 +167,21 @@ const onRun = async () => {
 const onStop = async () => {
   try {
     await runner.sendInterrupt()
-    runner.log('已发送 Interrupt。')
+    runner.log('Interrupt sent.')
     runner.isRunning.value = false
     runner.isOutputDone.value = false
   } catch (err) {
-    runner.log(`Interrupt 失败：${(err as Error)?.message || String(err)}`)
+    runner.log(`Interrupt failed: ${(err as Error)?.message || String(err)}`)
   }
 }
 
 onMounted(async () => {
+  workflow.setAutoParseEnabled(false)
   persist.loadPersistedState()
+  if (workflow.workflowJson.value.trim()) {
+    await workflow.parseWorkflow(workflow.workflowJson.value, false, true)
+  }
+  workflow.setAutoParseEnabled(true)
   await connection.fetchBackendConfig()
   await album.fetchAlbum()
   runner.connectWs()
@@ -156,8 +205,13 @@ onMounted(async () => {
           <WorkflowCard
             v-model:workflow-json="workflowJson"
             :parse-info="parseInfo"
+            :album-items="albumImages"
+            :image-parse-info="imageParseInfo"
+            :image-parse-loading="imageParseLoading"
             @parse="onParse"
             @clear="onClear"
+            @parse-image-file="onParseImageFile"
+            @parse-image-album="onParseImageAlbum"
           />
 
           <ParamsCard
