@@ -53,6 +53,19 @@ type AlbumItem = {
   url: string
 }
 
+type PersistedState = {
+  workflowJson: string
+  paramValues: Record<string, EditableValue>
+  simpleMode: boolean
+  simplePrompt: string
+  simpleWidth: number
+  simpleHeight: number
+  autoRandomSeed: boolean
+  albumSortOrder: 'asc' | 'desc'
+}
+
+const STORAGE_KEY = 'comfyui-assistant-ui-state-v1'
+
 function makeUUID(): string {
   const cryptoObj = globalThis.crypto
   if (cryptoObj?.randomUUID && typeof cryptoObj.randomUUID === 'function') {
@@ -118,6 +131,7 @@ const progressStatus = ref('等待进度...')
 const isRunning = ref(false)
 const autoRandomSeed = ref(true)
 const isOutputDone = ref(false)
+const persistedParamValues = ref<Record<string, EditableValue>>({})
 
 const backendOrigin = () => {
   const host = pcIp.value.trim()
@@ -205,6 +219,50 @@ const safeJsonParse = (raw: string) => {
   }
 }
 
+const loadPersistedState = () => {
+  const raw = localStorage.getItem(STORAGE_KEY)
+  if (!raw) return
+  const parsed = safeJsonParse(raw)
+  if (!parsed || typeof parsed !== 'object') return
+  const data = parsed as Partial<PersistedState>
+  if (typeof data.workflowJson === 'string') workflowJson.value = data.workflowJson
+  if (data.paramValues && typeof data.paramValues === 'object') {
+    persistedParamValues.value = data.paramValues as Record<string, EditableValue>
+  }
+  if (typeof data.simpleMode === 'boolean') simpleMode.value = data.simpleMode
+  if (typeof data.simplePrompt === 'string') simplePrompt.value = data.simplePrompt
+  if (typeof data.simpleWidth === 'number') simpleWidth.value = data.simpleWidth
+  if (typeof data.simpleHeight === 'number') simpleHeight.value = data.simpleHeight
+  if (typeof data.autoRandomSeed === 'boolean') autoRandomSeed.value = data.autoRandomSeed
+  if (data.albumSortOrder === 'asc' || data.albumSortOrder === 'desc') {
+    albumSortOrder.value = data.albumSortOrder
+  }
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+const schedulePersist = () => {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    const paramValues = buildParamValueMap(paramFields.value)
+    persistedParamValues.value = paramValues
+    const payload: PersistedState = {
+      workflowJson: workflowJson.value,
+      paramValues,
+      simpleMode: simpleMode.value,
+      simplePrompt: simplePrompt.value,
+      simpleWidth: simpleWidth.value,
+      simpleHeight: simpleHeight.value,
+      autoRandomSeed: autoRandomSeed.value,
+      albumSortOrder: albumSortOrder.value,
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    } catch {
+      // Ignore storage errors (quota, private mode)
+    }
+  }, 400)
+}
+
 const isEditableValue = (value: unknown): value is EditableValue =>
   typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 
@@ -229,6 +287,22 @@ const buildEditableParams = (wf: WorkflowMap) => {
   }
   return fields
 }
+
+const buildParamValueMap = (fields: ParamField[]) => {
+  const map: Record<string, EditableValue> = {}
+  for (const field of fields) {
+    map[field.id] = field.value
+  }
+  return map
+}
+
+const applyParamValueMap = (fields: ParamField[], map: Record<string, EditableValue>) =>
+  fields.map((field) => {
+    if (!Object.prototype.hasOwnProperty.call(map, field.id)) return field
+    const mapped = map[field.id]
+    if (mapped === undefined) return field
+    return { ...field, value: mapped }
+  })
 
 const updateFieldsByKey = (
   fields: ParamField[],
@@ -546,11 +620,13 @@ const parseWorkflow = async (raw: string, notify: boolean) => {
       return false
     }
     workflow.value = converted
-    paramFields.value = buildEditableParams(workflow.value)
+    const fields = buildEditableParams(workflow.value)
+    paramFields.value = applyParamValueMap(fields, persistedParamValues.value)
     syncSimpleFromFields(paramFields.value)
   } else if (looksLikeApiPrompt(obj)) {
     workflow.value = obj as WorkflowMap
-    paramFields.value = buildEditableParams(workflow.value)
+    const fields = buildEditableParams(workflow.value)
+    paramFields.value = applyParamValueMap(fields, persistedParamValues.value)
     syncSimpleFromFields(paramFields.value)
   } else {
     if (notify) alert('JSON 结构不符合 workflow 或 API prompt')
@@ -603,6 +679,7 @@ const onClear = () => {
   isRunning.value = false
   isOutputDone.value = false
   log('已清空。')
+  localStorage.removeItem(STORAGE_KEY)
 }
 
 const onRun = async () => {
@@ -676,6 +753,7 @@ const fetchBackendConfig = async () => {
 }
 
 onMounted(async () => {
+  loadPersistedState()
   await fetchBackendConfig()
   await fetchAlbum()
   connectWs()
@@ -693,6 +771,14 @@ watch(workflowJson, (next) => {
     void parseWorkflow(raw, false)
   }, 300)
 })
+
+watch(
+  [workflowJson, paramFields, simpleMode, simplePrompt, simpleWidth, simpleHeight, autoRandomSeed, albumSortOrder],
+  () => {
+    schedulePersist()
+  },
+  { deep: true },
+)
 
 onBeforeUnmount(() => {
   if (ws.value) ws.value.close()
