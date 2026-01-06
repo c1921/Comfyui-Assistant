@@ -130,7 +130,7 @@ const onPresetChange = (ev: Event) => {
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2 text-xs text-base-content/60">
           <span>预设</span>
-          <select class="select select-xs select-bordered" @change="onPresetChange">
+          <select class="select select-bordered" @change="onPresetChange">
             <option value="">自定义</option>
             <option v-for="preset in props.sizePresets" :key="preset.label" :value="preset.label">
               {{ preset.label }} ({{ preset.width }}×{{ preset.height }})
@@ -141,7 +141,7 @@ const onPresetChange = (ev: Event) => {
           <span>宽</span>
           <input
             type="number"
-            class="input input-bordered input-xs w-24"
+            class="input input-bordered w-24"
             :value="props.simpleWidth"
             @input="emit('update:simpleWidth', Number(($event.target as HTMLInputElement).value))"
           />
@@ -150,7 +150,7 @@ const onPresetChange = (ev: Event) => {
           <span>高</span>
           <input
             type="number"
-            class="input input-bordered input-xs w-24"
+            class="input input-bordered w-24"
             :value="props.simpleHeight"
             @input="emit('update:simpleHeight', Number(($event.target as HTMLInputElement).value))"
           />
@@ -165,108 +165,156 @@ const onPresetChange = (ev: Event) => {
       未发现可编辑字段。提示：只有 string/number/boolean 会被展示，连线引用会被跳过。
     </div>
     <div v-else>
-      <div v-for="group in groups" :key="group.key" class="mt-3">
-        <div class="mb-1.5 text-xs text-base-content/60">节点：{{ group.label }}</div>
-        <div v-for="field in group.items" :key="field.id" class="mb-2">
-          <label
-            v-if="field.inputType === 'boolean'"
-            class="inline-flex items-center gap-2 text-sm text-base-content/80"
+      <div class="accordion divide-neutral/20 divide-y">
+        <div
+          v-for="(group, index) in groups"
+          :key="group.key"
+          class="accordion-item"
+          :class="{ active: index === 0 }"
+          :id="`params-group-${index}`"
+        >
+          <button
+            class="accordion-toggle inline-flex items-center gap-x-3 text-start text-sm font-semibold"
+            :aria-controls="`params-group-${index}-collapse`"
+            :aria-expanded="index === 0"
           >
-            <span>{{ field.inputKey }}：</span>
-            <input
-              type="checkbox"
-              class="checkbox checkbox-sm"
-              :checked="Boolean(field.value)"
-              @change="
-                updateFieldValue(field.id, ($event.target as HTMLInputElement).checked)
-              "
-            />
-          </label>
-          <div v-else class="flex flex-wrap items-center gap-2 text-sm text-base-content/80">
-            <span>{{ field.inputKey }}：</span>
-            <div
-              v-if="field.inputType === 'number'"
-              class="max-w-sm"
-              data-input-number
-            >
-              <div class="input px-0">
-                <span class="border-base-content/25 border-e ps-0">
-                  <button
-                    type="button"
-                    class="flex size-9.5 items-center justify-center"
-                    aria-label="Decrement button"
-                    data-input-number-decrement
-                    @click="onNumberDecrement($event, field)"
+            <span
+              class="icon-[tabler--chevron-right] accordion-item-active:rotate-90 size-4 shrink-0 transition-transform duration-300 rtl:rotate-180"
+            ></span>
+            <span>节点：{{ group.label }}</span>
+          </button>
+          <div
+            :id="`params-group-${index}-collapse`"
+            class="accordion-content w-full overflow-hidden transition-[height] duration-300"
+            :class="{ hidden: index !== 0 }"
+            :aria-labelledby="`params-group-${index}`"
+            role="region"
+          >
+            <div class="px-2 pb-4 pt-3">
+              <div v-for="field in group.items" :key="field.id" class="mb-5">
+                <label
+                  v-if="field.inputType === 'boolean'"
+                  class="inline-flex items-center gap-2 text-sm text-base-content/80"
+                >
+                  <span>{{ field.inputKey }}：</span>
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm"
+                    :checked="Boolean(field.value)"
+                    @change="
+                      updateFieldValue(field.id, ($event.target as HTMLInputElement).checked)
+                    "
+                  />
+                </label>
+                <div v-else class="flex flex-wrap items-center gap-4 text-sm text-base-content/80">
+                  <div
+                    v-if="field.inputType === 'number'"
+                    class="input-floating w-full max-w-sm"
+                    data-input-number
                   >
-                    <span class="icon-[tabler--minus] size-3.5 shrink-0"></span>
-                  </button>
-                </span>
-                <input
-                  class="px-3"
-                  type="text"
-                  :value="String(field.value)"
-                  :id="`number-input-${field.id}`"
-                  aria-label="Number input"
-                  data-input-number-input
-                  @input="
-                    updateFieldValue(
-                      field.id,
-                      coerceNumber(($event.target as HTMLInputElement).value, Number(field.value)),
-                    )
-                  "
-                  @change="
-                    updateFieldValue(
-                      field.id,
-                      coerceNumber(($event.target as HTMLInputElement).value, Number(field.value)),
-                    )
-                  "
-                />
-                <span class="border-base-content/25 border-s pe-0">
-                  <button
-                    type="button"
-                    class="flex size-9.5 items-center justify-center"
-                    aria-label="Increment button"
-                    data-input-number-increment
-                    @click="onNumberIncrement($event, field)"
+                    <div class="input px-0">
+                      <span class="border-base-content/25 border-e ps-0">
+                        <button
+                          type="button"
+                          class="flex size-9.5 items-center justify-center"
+                          aria-label="Decrement button"
+                          data-input-number-decrement
+                          @click="onNumberDecrement($event, field)"
+                        >
+                          <span class="icon-[tabler--minus] size-3.5 shrink-0"></span>
+                        </button>
+                      </span>
+                      <input
+                        class="px-3"
+                        type="text"
+                        :value="String(field.value)"
+                        :id="`number-input-${field.id}`"
+                        placeholder=" "
+                        aria-label="Number input"
+                        data-input-number-input
+                        @input="
+                          updateFieldValue(
+                            field.id,
+                            coerceNumber(
+                              ($event.target as HTMLInputElement).value,
+                              Number(field.value),
+                            ),
+                          )
+                        "
+                        @change="
+                          updateFieldValue(
+                            field.id,
+                            coerceNumber(
+                              ($event.target as HTMLInputElement).value,
+                              Number(field.value),
+                            ),
+                          )
+                        "
+                      />
+                      <span class="border-base-content/25 border-s pe-0">
+                        <button
+                          type="button"
+                          class="flex size-9.5 items-center justify-center"
+                          aria-label="Increment button"
+                          data-input-number-increment
+                          @click="onNumberIncrement($event, field)"
+                        >
+                          <span class="icon-[tabler--plus] size-3.5 shrink-0"></span>
+                        </button>
+                      </span>
+                    </div>
+                    <label class="input-floating-label" :for="`number-input-${field.id}`">
+                      {{ field.inputKey }}
+                    </label>
+                  </div>
+                  <div v-else-if="asTextarea(field.value)" class="input-floating w-full max-w-130">
+                    <textarea
+                      class="textarea textarea-bordered textarea-sm w-full"
+                      :id="`textarea-input-${field.id}`"
+                      placeholder=" "
+                      :value="String(field.value)"
+                      rows="3"
+                      @input="updateFieldValue(field.id, ($event.target as HTMLTextAreaElement).value)"
+                    ></textarea>
+                    <label class="input-floating-label" :for="`textarea-input-${field.id}`">
+                      {{ field.inputKey }}
+                    </label>
+                  </div>
+                  <div v-else class="input-floating w-full max-w-130">
+                    <input
+                      class="input input-bordered w-full"
+                      :id="`text-input-${field.id}`"
+                      placeholder=" "
+                      :value="String(field.value)"
+                      @input="updateFieldValue(field.id, ($event.target as HTMLInputElement).value)"
+                    />
+                    <label class="input-floating-label" :for="`text-input-${field.id}`">
+                      {{ field.inputKey }}
+                    </label>
+                  </div>
+                  <label
+                    v-if="isSeedField(field.inputKey)"
+                    class="ml-1 inline-flex items-center gap-1 text-xs text-base-content/70"
                   >
-                    <span class="icon-[tabler--plus] size-3.5 shrink-0"></span>
-                  </button>
-                </span>
+                    <span>随机</span>
+                    <input
+                      type="checkbox"
+                      class="toggle toggle-xs"
+                      :checked="props.autoRandomSeed"
+                      @change="
+                        emit('update:autoRandomSeed', ($event.target as HTMLInputElement).checked)
+                      "
+                    />
+                  </label>
+                </div>
               </div>
             </div>
-            <textarea
-              v-else-if="asTextarea(field.value)"
-              class="textarea textarea-bordered textarea-sm w-full max-w-130"
-              :value="String(field.value)"
-              rows="3"
-              @input="updateFieldValue(field.id, ($event.target as HTMLTextAreaElement).value)"
-            ></textarea>
-            <input
-              v-else
-              class="input input-bordered input-sm w-full max-w-130"
-              :value="String(field.value)"
-              @input="updateFieldValue(field.id, ($event.target as HTMLInputElement).value)"
-            />
-            <label
-              v-if="isSeedField(field.inputKey)"
-              class="ml-1 inline-flex items-center gap-1 text-xs text-base-content/70"
-            >
-              <span>随机</span>
-              <input
-                type="checkbox"
-                class="toggle toggle-xs"
-                :checked="props.autoRandomSeed"
-                @change="
-                  emit('update:autoRandomSeed', ($event.target as HTMLInputElement).checked)
-                "
-              />
-            </label>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="mt-3 flex flex-wrap gap-3">
+    <div class="mt-8 flex flex-wrap gap-3">
       <button class="btn btn-primary btn-sm" @click="emit('run')">运行</button>
       <button class="btn btn-outline btn-sm" @click="emit('stop')">中止（Interrupt）</button>
     </div>

@@ -64,7 +64,7 @@ const onParseAlbum = () => {
       <input
         type="file"
         accept=".json,application/json"
-        class="input input-bordered input-sm max-w-sm"
+        class="input input-bordered max-w-sm"
         aria-label="file-input"
         @change="onFileChange"
       />
@@ -79,7 +79,7 @@ const onParseAlbum = () => {
         <input
           type="file"
           accept=".png,image/png"
-          class="input input-bordered input-sm max-w-sm"
+          class="input input-bordered max-w-sm"
           aria-label="png-input"
           @change="onPngChange"
         />
@@ -88,7 +88,7 @@ const onParseAlbum = () => {
       <div class="mt-2 flex flex-wrap items-center gap-3">
         <select
           v-model="selectedAlbum"
-          class="select select-bordered select-sm max-w-xs"
+          class="select select-bordered"
           :disabled="props.albumItems.length === 0"
         >
           <option value="">选择相册图片</option>

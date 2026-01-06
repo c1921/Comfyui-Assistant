@@ -82,7 +82,7 @@ const filteredItems = computed(() =>
       <h3 class="text-base font-semibold">相册</h3>
       <div class="flex items-center gap-2">
         <select
-          class="select select-xs select-bordered"
+          class="select select-bordered"
           :value="selectedFolder"
           @change="selectedFolder = ($event.target as HTMLSelectElement).value"
         >
@@ -90,7 +90,7 @@ const filteredItems = computed(() =>
             {{ option.label }}
           </option>
         </select>
-        <select class="select select-xs select-bordered" :value="props.sortOrder" @change="onSortChange">
+        <select class="select select-bordered" :value="props.sortOrder" @change="onSortChange">
           <option value="desc">倒序</option>
           <option value="asc">正序</option>
         </select>
