@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import coil.ImageLoader
 import io.github.c1921.comfyui_assistant.R
+import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.feature.generate.GenerateScreen
 import io.github.c1921.comfyui_assistant.feature.generate.GenerateUiState
@@ -42,6 +43,7 @@ fun MainScreen(
     isGenerateEnabled: Boolean,
     onPromptChanged: (String) -> Unit,
     onNegativeChanged: (String) -> Unit,
+    onImagePresetChanged: (ImageAspectPreset) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
     onDownloadResult: (GeneratedOutput, Int) -> Unit,
@@ -51,6 +53,7 @@ fun MainScreen(
     onPromptFieldNameChanged: (String) -> Unit,
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
+    onSizeNodeIdChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -94,6 +97,7 @@ fun MainScreen(
                     isGenerateEnabled = isGenerateEnabled,
                     onPromptChanged = onPromptChanged,
                     onNegativeChanged = onNegativeChanged,
+                    onImagePresetChanged = onImagePresetChanged,
                     onGenerate = onGenerate,
                     onRetry = onRetry,
                     imageLoader = imageLoader,
@@ -108,6 +112,7 @@ fun MainScreen(
                     onPromptFieldNameChanged = onPromptFieldNameChanged,
                     onNegativeNodeIdChanged = onNegativeNodeIdChanged,
                     onNegativeFieldNameChanged = onNegativeFieldNameChanged,
+                    onSizeNodeIdChanged = onSizeNodeIdChanged,
                     onDecodePasswordChanged = onDecodePasswordChanged,
                     onSaveSettings = onSaveSettings,
                     onClearApiKey = onClearApiKey,

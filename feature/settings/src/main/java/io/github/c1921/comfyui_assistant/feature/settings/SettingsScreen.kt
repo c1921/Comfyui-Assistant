@@ -29,6 +29,7 @@ fun SettingsScreen(
     onPromptFieldNameChanged: (String) -> Unit,
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
+    onSizeNodeIdChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -78,6 +79,12 @@ fun SettingsScreen(
             onValueChange = onNegativeFieldNameChanged,
             label = { Text(stringResource(R.string.settings_negative_field_name_label)) },
             placeholder = { Text(stringResource(R.string.settings_field_name_placeholder)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.sizeNodeId,
+            onValueChange = onSizeNodeIdChanged,
+            label = { Text(stringResource(R.string.settings_size_node_id_label)) },
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(

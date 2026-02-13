@@ -7,31 +7,34 @@ import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
+import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.InMemoryConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GenerateViewModelTest {
-    private val dispatcher = StandardTestDispatcher()
-
     @Test
     fun `retry without previous task keeps idle state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
         val viewModel = GenerateViewModel(
             configRepository = FakeConfigRepository(validConfig()),
             configDraftStore = InMemoryConfigDraftStore(),
-            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            generationRepository = generationRepository,
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -43,12 +46,80 @@ class GenerateViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `generate submits selected image preset`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfigWithSizeMapping()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("hello")
+        viewModel.onImagePresetChanged(ImageAspectPreset.RATIO_3_2)
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(ImageAspectPreset.RATIO_3_2, generationRepository.lastInput?.imagePreset)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `isGenerateEnabled is false for non 1 to 1 when size mapping missing`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("hello")
+        viewModel.onImagePresetChanged(ImageAspectPreset.RATIO_16_9)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.isGenerateEnabled(viewModel.uiState.value))
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `isGenerateEnabled remains true for 1 to 1 when size mapping missing`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("hello")
+        viewModel.onImagePresetChanged(ImageAspectPreset.RATIO_1_1)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.isGenerateEnabled(viewModel.uiState.value))
+        Dispatchers.resetMain()
+    }
+
     private fun validConfig(): WorkflowConfig {
         return WorkflowConfig(
             apiKey = "key",
             workflowId = "workflow",
             promptNodeId = "6",
             promptFieldName = "text",
+        )
+    }
+
+    private fun validConfigWithSizeMapping(): WorkflowConfig {
+        return validConfig().copy(
+            sizeNodeId = "5",
         )
     }
 
@@ -65,10 +136,15 @@ class GenerateViewModelTest {
     private class FakeGenerationRepository(
         private val flow: Flow<GenerationState>,
     ) : GenerationRepository {
+        var lastInput: GenerationInput? = null
+
         override fun generateAndPoll(
             config: WorkflowConfig,
             input: GenerationInput,
-        ): Flow<GenerationState> = flow
+        ): Flow<GenerationState> {
+            lastInput = input
+            return flow
+        }
     }
 
     private class FakeMediaSaver : MediaSaver {

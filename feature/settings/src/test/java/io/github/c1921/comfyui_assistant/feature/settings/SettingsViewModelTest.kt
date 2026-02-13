@@ -10,15 +10,16 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
-    private val dispatcher = StandardTestDispatcher()
-
     @Test
     fun `saveSettings does not persist when negative mapping is incomplete`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         val repository = FakeConfigRepository()
         val viewModel = SettingsViewModel(
@@ -32,27 +33,70 @@ class SettingsViewModelTest {
         viewModel.saveSettings()
         advanceUntilIdle()
 
-        assertTrue(!repository.saveCalled)
+        assertFalse(repository.saveCalled)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `saveSettings persists when size nodeId is provided`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onSizeNodeIdChanged("5")
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertEquals("5", repository.currentConfig.sizeNodeId)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `saveSettings persists with size nodeId`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onSizeNodeIdChanged("5")
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertEquals("5", repository.currentConfig.sizeNodeId)
         Dispatchers.resetMain()
     }
 
     private class FakeConfigRepository(
         initialConfig: WorkflowConfig = WorkflowConfig(),
     ) : ConfigRepository {
-        private var config = initialConfig
+        var currentConfig = initialConfig
+            private set
         var clearCalled: Boolean = false
         var saveCalled: Boolean = false
 
-        override suspend fun loadConfig(): WorkflowConfig = config
+        override suspend fun loadConfig(): WorkflowConfig = currentConfig
 
         override suspend fun saveConfig(config: WorkflowConfig) {
             saveCalled = true
-            this.config = config
+            currentConfig = config
         }
 
         override suspend fun clearApiKey() {
             clearCalled = true
-            config = config.copy(apiKey = "")
+            currentConfig = currentConfig.copy(apiKey = "")
         }
     }
 }

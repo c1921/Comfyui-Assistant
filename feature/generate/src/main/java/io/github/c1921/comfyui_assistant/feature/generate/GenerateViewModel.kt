@@ -11,6 +11,7 @@ import io.github.c1921.comfyui_assistant.domain.ConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
+import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,10 +53,18 @@ class GenerateViewModel(
         _uiState.update { it.copy(negative = value) }
     }
 
+    fun onImagePresetChanged(value: ImageAspectPreset) {
+        _uiState.update { it.copy(selectedImagePreset = value) }
+    }
+
     fun isGenerateEnabled(state: GenerateUiState): Boolean {
         return WorkflowConfigValidator.validateForGenerate(
             config = state.config,
-            input = GenerationInput(prompt = state.prompt, negative = state.negative),
+            input = GenerationInput(
+                prompt = state.prompt,
+                negative = state.negative,
+                imagePreset = state.selectedImagePreset,
+            ),
         ) == null
     }
 
@@ -68,6 +77,7 @@ class GenerateViewModel(
         val input = GenerationInput(
             prompt = state.prompt.trim(),
             negative = state.negative.trim(),
+            imagePreset = state.selectedImagePreset,
         )
         lastSubmittedInput = input
         executeGeneration(input)

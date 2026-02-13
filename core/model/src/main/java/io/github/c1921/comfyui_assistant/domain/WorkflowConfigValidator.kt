@@ -25,6 +25,13 @@ object WorkflowConfigValidator {
         if (hasNegativeText && !hasNegativeMapping) {
             return "Negative prompt is provided, but negative mapping is not configured."
         }
+
+        if (
+            input.imagePreset != ImageAspectPreset.RATIO_1_1 &&
+            !hasCompleteImageSizeMapping(config)
+        ) {
+            return "Selected ratio requires width/height mapping in Settings."
+        }
         return null
     }
 
@@ -34,5 +41,9 @@ object WorkflowConfigValidator {
             input = GenerationInput(prompt = prompt, negative = ""),
         )
         return validation == null
+    }
+
+    fun hasCompleteImageSizeMapping(config: WorkflowConfig): Boolean {
+        return config.sizeNodeId.isNotBlank()
     }
 }

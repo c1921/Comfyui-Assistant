@@ -1,6 +1,7 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
 import io.github.c1921.comfyui_assistant.domain.GenerationState
+import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 
 data class GenerateUiState(
@@ -8,5 +9,6 @@ data class GenerateUiState(
     val config: WorkflowConfig = WorkflowConfig(),
     val prompt: String = "",
     val negative: String = "",
+    val selectedImagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
     val generationState: GenerationState = GenerationState.Idle,
 )

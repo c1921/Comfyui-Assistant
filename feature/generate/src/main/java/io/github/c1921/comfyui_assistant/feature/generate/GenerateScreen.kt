@@ -11,11 +11,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -27,14 +34,18 @@ import coil.request.ImageRequest
 import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckDecodeRequestParams.enableDuckAutoDecode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
+import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
+import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenerateScreen(
     state: GenerateUiState,
     isGenerateEnabled: Boolean,
     onPromptChanged: (String) -> Unit,
     onNegativeChanged: (String) -> Unit,
+    onImagePresetChanged: (ImageAspectPreset) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
     imageLoader: ImageLoader,
@@ -46,6 +57,10 @@ fun GenerateScreen(
         generationState is GenerationState.Submitting ||
         generationState is GenerationState.Queued ||
         generationState is GenerationState.Running
+    val hasCompleteImageSizeMapping = WorkflowConfigValidator.hasCompleteImageSizeMapping(state.config)
+    val needsImageSizeMapping =
+        state.selectedImagePreset != ImageAspectPreset.RATIO_1_1 && !hasCompleteImageSizeMapping
+    var presetMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -74,6 +89,53 @@ fun GenerateScreen(
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
         )
+        ExposedDropdownMenuBox(
+            expanded = presetMenuExpanded,
+            onExpandedChange = { presetMenuExpanded = !presetMenuExpanded },
+        ) {
+            OutlinedTextField(
+                value = stringResource(
+                    R.string.gen_ratio_value,
+                    state.selectedImagePreset.label,
+                    state.selectedImagePreset.width,
+                    state.selectedImagePreset.height,
+                ),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(stringResource(R.string.gen_ratio_label)) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetMenuExpanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.RATIO_SELECTOR),
+            )
+            ExposedDropdownMenu(
+                expanded = presetMenuExpanded,
+                onDismissRequest = { presetMenuExpanded = false },
+            ) {
+                ImageAspectPreset.entries.forEach { preset ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    R.string.gen_ratio_value,
+                                    preset.label,
+                                    preset.width,
+                                    preset.height,
+                                )
+                            )
+                        },
+                        onClick = {
+                            onImagePresetChanged(preset)
+                            presetMenuExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+        if (needsImageSizeMapping) {
+            Text(stringResource(R.string.gen_ratio_mapping_hint))
+        }
 
         if (!isGenerateEnabled) {
             Text(stringResource(R.string.gen_config_hint))

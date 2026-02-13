@@ -31,6 +31,11 @@ class SecureConfigStore(
     }
 
     override suspend fun loadConfig(): WorkflowConfig = withContext(ioDispatcher) {
+        val sizeNodeId = prefs.getString(KEY_SIZE_NODE_ID, "").orEmpty().ifBlank {
+            prefs.getString(KEY_SIZE_WIDTH_NODE_ID_LEGACY, "").orEmpty().ifBlank {
+                prefs.getString(KEY_SIZE_HEIGHT_NODE_ID_LEGACY, "").orEmpty()
+            }
+        }
         WorkflowConfig(
             apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
             workflowId = prefs.getString(KEY_WORKFLOW_ID, "").orEmpty(),
@@ -38,6 +43,7 @@ class SecureConfigStore(
             promptFieldName = prefs.getString(KEY_PROMPT_FIELD_NAME, "").orEmpty(),
             negativeNodeId = prefs.getString(KEY_NEGATIVE_NODE_ID, "").orEmpty(),
             negativeFieldName = prefs.getString(KEY_NEGATIVE_FIELD_NAME, "").orEmpty(),
+            sizeNodeId = sizeNodeId,
             decodePassword = prefs.getString(KEY_DECODE_PASSWORD, "").orEmpty(),
         )
     }
@@ -50,6 +56,7 @@ class SecureConfigStore(
             putString(KEY_PROMPT_FIELD_NAME, config.promptFieldName.trim())
             putString(KEY_NEGATIVE_NODE_ID, config.negativeNodeId.trim())
             putString(KEY_NEGATIVE_FIELD_NAME, config.negativeFieldName.trim())
+            putString(KEY_SIZE_NODE_ID, config.sizeNodeId.trim())
             putString(KEY_DECODE_PASSWORD, config.decodePassword)
         }
     }
@@ -66,6 +73,9 @@ class SecureConfigStore(
         const val KEY_PROMPT_FIELD_NAME = "prompt_field_name"
         const val KEY_NEGATIVE_NODE_ID = "negative_node_id"
         const val KEY_NEGATIVE_FIELD_NAME = "negative_field_name"
+        const val KEY_SIZE_NODE_ID = "size_node_id"
+        const val KEY_SIZE_WIDTH_NODE_ID_LEGACY = "size_width_node_id"
+        const val KEY_SIZE_HEIGHT_NODE_ID_LEGACY = "size_height_node_id"
         const val KEY_DECODE_PASSWORD = "decode_password"
     }
 }

@@ -10,6 +10,7 @@ data class SettingsUiState(
     val promptFieldName: String = "",
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
+    val sizeNodeId: String = "",
     val decodePassword: String = "",
 ) {
     fun toWorkflowConfig(): WorkflowConfig {
@@ -20,6 +21,7 @@ data class SettingsUiState(
             promptFieldName = promptFieldName,
             negativeNodeId = negativeNodeId,
             negativeFieldName = negativeFieldName,
+            sizeNodeId = sizeNodeId,
             decodePassword = decodePassword,
         )
     }

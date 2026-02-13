@@ -9,7 +9,7 @@ import retrofit2.http.POST
 data class NodeInfoItem(
     val nodeId: String,
     val fieldName: String,
-    val fieldValue: String,
+    val fieldValue: Any,
 )
 
 data class CreateTaskRequest(

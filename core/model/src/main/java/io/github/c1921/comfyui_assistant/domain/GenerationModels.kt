@@ -7,13 +7,65 @@ data class WorkflowConfig(
     val promptFieldName: String = "",
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
+    val sizeNodeId: String = "",
     val decodePassword: String = "",
 )
 
 data class GenerationInput(
     val prompt: String,
     val negative: String,
+    val imagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
 )
+
+enum class ImageAspectPreset(
+    val id: String,
+    val label: String,
+    val width: Int,
+    val height: Int,
+) {
+    RATIO_1_1(
+        id = "1:1",
+        label = "1:1",
+        width = 1024,
+        height = 1024,
+    ),
+    RATIO_3_4(
+        id = "3:4",
+        label = "3:4",
+        width = 880,
+        height = 1184,
+    ),
+    RATIO_4_3(
+        id = "4:3",
+        label = "4:3",
+        width = 1184,
+        height = 880,
+    ),
+    RATIO_9_16(
+        id = "9:16",
+        label = "9:16",
+        width = 752,
+        height = 1392,
+    ),
+    RATIO_16_9(
+        id = "16:9",
+        label = "16:9",
+        width = 1392,
+        height = 752,
+    ),
+    RATIO_2_3(
+        id = "2:3",
+        label = "2:3",
+        width = 832,
+        height = 1248,
+    ),
+    RATIO_3_2(
+        id = "3:2",
+        label = "3:2",
+        width = 1248,
+        height = 832,
+    );
+}
 
 data class GeneratedOutput(
     val fileUrl: String,

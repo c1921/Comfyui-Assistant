@@ -55,6 +55,10 @@ class SettingsViewModel(
         configDraftStore.update { it.copy(negativeFieldName = value) }
     }
 
+    fun onSizeNodeIdChanged(value: String) {
+        configDraftStore.update { it.copy(sizeNodeId = value) }
+    }
+
     fun onDecodePasswordChanged(value: String) {
         configDraftStore.update { it.copy(decodePassword = value) }
     }
@@ -100,6 +104,7 @@ class SettingsViewModel(
                         promptFieldName = config.promptFieldName,
                         negativeNodeId = config.negativeNodeId,
                         negativeFieldName = config.negativeFieldName,
+                        sizeNodeId = config.sizeNodeId,
                         decodePassword = config.decodePassword,
                     )
                 }
