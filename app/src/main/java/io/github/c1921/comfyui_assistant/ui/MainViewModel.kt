@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.github.c1921.comfyui_assistant.data.local.SecureConfigStore
+import io.github.c1921.comfyui_assistant.data.decoder.fallbackOrNull
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
 import io.github.c1921.comfyui_assistant.data.repository.ImageDownloader
 import io.github.c1921.comfyui_assistant.data.repository.WorkflowConfigValidator
@@ -34,6 +35,7 @@ class MainViewModel(
 
     private var generationJob: Job? = null
     private var lastSubmittedInput: GenerationInput? = null
+    private val notifiedDecodeFallbackUrls = mutableSetOf<String>()
 
     init {
         loadConfig()
@@ -65,6 +67,10 @@ class MainViewModel(
 
     fun onNegativeFieldNameChanged(value: String) {
         _uiState.update { it.copy(negativeFieldName = value) }
+    }
+
+    fun onDecodePasswordChanged(value: String) {
+        _uiState.update { it.copy(decodePassword = value) }
     }
 
     fun onPromptChanged(value: String) {
@@ -149,8 +155,17 @@ class MainViewModel(
                 fileType = output.fileType,
                 taskId = taskId,
                 index = index,
-            ).onSuccess { fileName ->
-                emitMessage("Saved to gallery: $fileName")
+                decodePassword = state.decodePassword,
+            ).onSuccess { downloadResult ->
+                emitMessage("Saved to gallery: ${downloadResult.fileName}")
+                val fallback = downloadResult.decodeOutcome.fallbackOrNull()
+                if (
+                    fallback != null &&
+                    fallback.shouldNotifyUser &&
+                    notifiedDecodeFallbackUrls.add(output.fileUrl)
+                ) {
+                    emitMessage(fallback.message)
+                }
             }.onFailure { error ->
                 emitMessage("Save failed: ${error.message.orEmpty()}")
             }
@@ -169,6 +184,7 @@ class MainViewModel(
                     promptFieldName = config.promptFieldName,
                     negativeNodeId = config.negativeNodeId,
                     negativeFieldName = config.negativeFieldName,
+                    decodePassword = config.decodePassword,
                 )
             }
         }

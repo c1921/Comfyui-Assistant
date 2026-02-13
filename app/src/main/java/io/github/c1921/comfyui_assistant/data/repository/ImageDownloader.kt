@@ -3,6 +3,8 @@ package io.github.c1921.comfyui_assistant.data.repository
 import android.content.ContentValues
 import android.content.Context
 import android.provider.MediaStore
+import io.github.c1921.comfyui_assistant.data.decoder.DuckDecodeOutcome
+import io.github.c1921.comfyui_assistant.data.decoder.DuckPayloadDecoder
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.Locale
@@ -10,13 +12,16 @@ import java.util.Locale
 class ImageDownloader(
     private val httpClient: OkHttpClient,
 ) {
+    private val payloadDecoder = DuckPayloadDecoder()
+
     suspend fun downloadToGallery(
         context: Context,
         fileUrl: String,
         fileType: String,
         taskId: String,
         index: Int,
-    ): Result<String> {
+        decodePassword: String,
+    ): Result<DownloadToGalleryResult> {
         return runCatching {
             val request = Request.Builder()
                 .url(fileUrl)
@@ -28,8 +33,16 @@ class ImageDownloader(
                     throw IllegalStateException("Download failed, HTTP ${response.code}")
                 }
                 val body = response.body ?: throw IllegalStateException("Download failed, empty body.")
+                val downloadedBytes = body.bytes()
+                val decodeOutcome = payloadDecoder.decodeIfCarrierImage(
+                    imageBytes = downloadedBytes,
+                    password = decodePassword,
+                )
 
-                val extension = resolveExtension(fileType, fileUrl)
+                val (bytesToSave, extension) = when (decodeOutcome) {
+                    is DuckDecodeOutcome.Decoded -> decodeOutcome.imageBytes to decodeOutcome.extension
+                    is DuckDecodeOutcome.Fallback -> downloadedBytes to resolveExtension(fileType, fileUrl)
+                }
                 val mimeType = resolveMimeType(extension)
                 val fileName = buildFileName(taskId, index, extension)
 
@@ -45,14 +58,17 @@ class ImageDownloader(
                     ?: throw IllegalStateException("Unable to create gallery entry.")
 
                 resolver.openOutputStream(uri)?.use { output ->
-                    body.byteStream().use { input -> input.copyTo(output) }
+                    output.write(bytesToSave)
                 } ?: throw IllegalStateException("Unable to open output stream.")
 
                 val doneValues = ContentValues().apply {
                     put(MediaStore.Images.Media.IS_PENDING, 0)
                 }
                 resolver.update(uri, doneValues, null, null)
-                fileName
+                DownloadToGalleryResult(
+                    fileName = fileName,
+                    decodeOutcome = decodeOutcome,
+                )
             }
         }
     }

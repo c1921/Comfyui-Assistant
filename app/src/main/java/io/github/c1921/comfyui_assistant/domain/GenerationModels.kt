@@ -7,6 +7,7 @@ data class WorkflowConfig(
     val promptFieldName: String = "",
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
+    val decodePassword: String = "",
 )
 
 data class GenerationInput(

@@ -17,6 +17,7 @@ data class MainUiState(
     val promptFieldName: String = "",
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
+    val decodePassword: String = "",
     val prompt: String = "",
     val negative: String = "",
     val generationState: GenerationState = GenerationState.Idle,
@@ -28,6 +29,7 @@ data class MainUiState(
         promptFieldName = promptFieldName,
         negativeNodeId = negativeNodeId,
         negativeFieldName = negativeFieldName,
+        decodePassword = decodePassword,
     )
 }
 

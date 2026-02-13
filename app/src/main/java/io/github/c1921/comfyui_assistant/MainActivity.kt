@@ -39,12 +39,14 @@ class MainActivity : ComponentActivity() {
                     onPromptFieldNameChanged = viewModel::onPromptFieldNameChanged,
                     onNegativeNodeIdChanged = viewModel::onNegativeNodeIdChanged,
                     onNegativeFieldNameChanged = viewModel::onNegativeFieldNameChanged,
+                    onDecodePasswordChanged = viewModel::onDecodePasswordChanged,
                     onPromptChanged = viewModel::onPromptChanged,
                     onNegativeChanged = viewModel::onNegativeChanged,
                     onSaveSettings = viewModel::saveSettings,
                     onClearApiKey = viewModel::clearApiKey,
                     onGenerate = viewModel::generate,
                     onRetry = viewModel::retry,
+                    imageLoader = appContainer.imageLoader,
                     onDownloadResult = { fileUrl, fileType, index ->
                         viewModel.downloadResult(
                             context = applicationContext,

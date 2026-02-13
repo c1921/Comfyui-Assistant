@@ -26,11 +26,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckDecodeRequestParams.enableDuckAutoDecode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -47,12 +51,14 @@ fun MainScreen(
     onPromptFieldNameChanged: (String) -> Unit,
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
+    onDecodePasswordChanged: (String) -> Unit,
     onPromptChanged: (String) -> Unit,
     onNegativeChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
+    imageLoader: ImageLoader,
     onDownloadResult: (String, String, Int) -> Unit,
     messages: Flow<String>,
 ) {
@@ -94,6 +100,7 @@ fun MainScreen(
                     onNegativeChanged = onNegativeChanged,
                     onGenerate = onGenerate,
                     onRetry = onRetry,
+                    imageLoader = imageLoader,
                     onDownloadResult = onDownloadResult,
                 )
 
@@ -105,6 +112,7 @@ fun MainScreen(
                     onPromptFieldNameChanged = onPromptFieldNameChanged,
                     onNegativeNodeIdChanged = onNegativeNodeIdChanged,
                     onNegativeFieldNameChanged = onNegativeFieldNameChanged,
+                    onDecodePasswordChanged = onDecodePasswordChanged,
                     onSaveSettings = onSaveSettings,
                     onClearApiKey = onClearApiKey,
                 )
@@ -121,8 +129,10 @@ private fun GenerateTab(
     onNegativeChanged: (String) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
+    imageLoader: ImageLoader,
     onDownloadResult: (String, String, Int) -> Unit,
 ) {
+    val context = LocalContext.current
     val generationState = state.generationState
     val isProcessing = generationState is GenerationState.ValidatingConfig ||
         generationState is GenerationState.Submitting ||
@@ -178,8 +188,15 @@ private fun GenerateTab(
             generationState.results.forEachIndexed { index, result ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp)) {
+                        val imageRequest = remember(result.fileUrl, state.decodePassword) {
+                            ImageRequest.Builder(context)
+                                .data(result.fileUrl)
+                                .enableDuckAutoDecode(state.decodePassword)
+                                .build()
+                        }
                         AsyncImage(
-                            model = result.fileUrl,
+                            model = imageRequest,
+                            imageLoader = imageLoader,
                             contentDescription = "Generated image",
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -214,6 +231,7 @@ private fun SettingsTab(
     onPromptFieldNameChanged: (String) -> Unit,
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
+    onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
 ) {
@@ -263,6 +281,14 @@ private fun SettingsTab(
             label = { Text("Negative fieldName (optional)") },
             placeholder = { Text("Example: text") },
             modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.decodePassword,
+            onValueChange = onDecodePasswordChanged,
+            label = { Text("Decode password (optional)") },
+            placeholder = { Text("Used for SS_tools encrypted image decode") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(),
         )
 
         Row(

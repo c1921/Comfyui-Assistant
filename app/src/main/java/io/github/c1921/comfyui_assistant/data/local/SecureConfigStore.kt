@@ -32,6 +32,7 @@ class SecureConfigStore(
             promptFieldName = prefs.getString(KEY_PROMPT_FIELD_NAME, "").orEmpty(),
             negativeNodeId = prefs.getString(KEY_NEGATIVE_NODE_ID, "").orEmpty(),
             negativeFieldName = prefs.getString(KEY_NEGATIVE_FIELD_NAME, "").orEmpty(),
+            decodePassword = prefs.getString(KEY_DECODE_PASSWORD, "").orEmpty(),
         )
     }
 
@@ -43,6 +44,7 @@ class SecureConfigStore(
             .putString(KEY_PROMPT_FIELD_NAME, config.promptFieldName.trim())
             .putString(KEY_NEGATIVE_NODE_ID, config.negativeNodeId.trim())
             .putString(KEY_NEGATIVE_FIELD_NAME, config.negativeFieldName.trim())
+            .putString(KEY_DECODE_PASSWORD, config.decodePassword)
             .apply()
     }
 
@@ -58,5 +60,6 @@ class SecureConfigStore(
         const val KEY_PROMPT_FIELD_NAME = "prompt_field_name"
         const val KEY_NEGATIVE_NODE_ID = "negative_node_id"
         const val KEY_NEGATIVE_FIELD_NAME = "negative_field_name"
+        const val KEY_DECODE_PASSWORD = "decode_password"
     }
 }
