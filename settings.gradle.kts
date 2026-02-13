@@ -24,3 +24,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "Comfyui-Assistant"
 include(":app")
+include(":core:model")
+include(":core:network")
+include(":core:storage")
+include(":core:media")
+include(":feature:generate")
+include(":feature:settings")

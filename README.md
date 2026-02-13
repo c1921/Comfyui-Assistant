@@ -2,6 +2,16 @@
 
 一个原生 Android 应用，用于通过 RunningHub Workflow API 发起图像生成任务、轮询结果并下载到相册。
 
+## 0. 项目结构（重构后）
+
+- `:app`：应用入口、Tab 导航、依赖装配
+- `:core:model`：共享模型与校验逻辑
+- `:core:network`：RunningHub API、解析器、生成仓储实现
+- `:core:storage`：配置加密存储与 `ConfigRepository`
+- `:core:media`：图片下载/解码/保存与 `MediaSaver`
+- `:feature:generate`：生成页 UI + `GenerateViewModel`
+- `:feature:settings`：设置页 UI + `SettingsViewModel`
+
 ## 1. 功能简介
 
 - 使用 `workflowId + nodeInfoList` 调用 RunningHub 工作流任务
@@ -95,8 +105,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ```powershell
 .\gradlew.bat testDebugUnitTest
+.\gradlew.bat lintDebug
 .\gradlew.bat assembleDebug
 ```
 
 若你要编译 AndroidTest，网络环境需能访问 Google Maven（`dl.google.com`）。
-

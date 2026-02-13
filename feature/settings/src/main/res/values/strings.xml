@@ -1,0 +1,15 @@
+<resources>
+    <string name="settings_api_key_label">API key</string>
+    <string name="settings_workflow_id_label">workflowId</string>
+    <string name="settings_workflow_id_placeholder">Example: 1980237776367083521</string>
+    <string name="settings_prompt_node_id_label">Prompt nodeId</string>
+    <string name="settings_prompt_field_name_label">Prompt fieldName</string>
+    <string name="settings_field_name_placeholder">Example: text</string>
+    <string name="settings_negative_node_id_label">Negative nodeId (optional)</string>
+    <string name="settings_negative_field_name_label">Negative fieldName (optional)</string>
+    <string name="settings_decode_password_label">Decode password (optional)</string>
+    <string name="settings_decode_password_placeholder">Used for SS_tools encrypted image decode</string>
+    <string name="settings_save_button">Save config</string>
+    <string name="settings_clear_api_key_button">Clear API key</string>
+    <string name="settings_help_text">nodeId and fieldName can be found in exported workflow API JSON.</string>
+</resources>

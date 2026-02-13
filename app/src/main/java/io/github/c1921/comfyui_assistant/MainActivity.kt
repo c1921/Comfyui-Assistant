@@ -5,21 +5,33 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import io.github.c1921.comfyui_assistant.feature.generate.GenerateViewModel
+import io.github.c1921.comfyui_assistant.feature.settings.SettingsViewModel
 import io.github.c1921.comfyui_assistant.ui.MainScreen
-import io.github.c1921.comfyui_assistant.ui.MainViewModel
+import io.github.c1921.comfyui_assistant.ui.MainTab
 import io.github.c1921.comfyui_assistant.ui.theme.ComfyuiAssistantTheme
 
 class MainActivity : ComponentActivity() {
     private val appContainer by lazy { AppContainer(applicationContext) }
 
-    private val viewModel: MainViewModel by viewModels {
-        MainViewModel.Factory(
-            configStore = appContainer.configStore,
+    private val generateViewModel: GenerateViewModel by viewModels {
+        GenerateViewModel.Factory(
+            configRepository = appContainer.configRepository,
+            configDraftStore = appContainer.configDraftStore,
             generationRepository = appContainer.generationRepository,
-            imageDownloader = appContainer.imageDownloader,
+            mediaSaver = appContainer.mediaSaver,
+        )
+    }
+
+    private val settingsViewModel: SettingsViewModel by viewModels {
+        SettingsViewModel.Factory(
+            configRepository = appContainer.configRepository,
+            configDraftStore = appContainer.configDraftStore,
         )
     }
 
@@ -28,37 +40,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ComfyuiAssistantTheme {
-                val state by viewModel.uiState.collectAsState()
+                var selectedTab by remember { mutableStateOf(MainTab.Generate) }
+                val generateState by generateViewModel.uiState.collectAsState()
+                val settingsState by settingsViewModel.uiState.collectAsState()
                 MainScreen(
-                    state = state,
-                    isGenerateEnabled = viewModel.isGenerateEnabled(state),
-                    onSelectTab = viewModel::selectTab,
-                    onApiKeyChanged = viewModel::onApiKeyChanged,
-                    onWorkflowIdChanged = viewModel::onWorkflowIdChanged,
-                    onPromptNodeIdChanged = viewModel::onPromptNodeIdChanged,
-                    onPromptFieldNameChanged = viewModel::onPromptFieldNameChanged,
-                    onNegativeNodeIdChanged = viewModel::onNegativeNodeIdChanged,
-                    onNegativeFieldNameChanged = viewModel::onNegativeFieldNameChanged,
-                    onDecodePasswordChanged = viewModel::onDecodePasswordChanged,
-                    onPromptChanged = viewModel::onPromptChanged,
-                    onNegativeChanged = viewModel::onNegativeChanged,
-                    onSaveSettings = viewModel::saveSettings,
-                    onClearApiKey = viewModel::clearApiKey,
-                    onGenerate = viewModel::generate,
-                    onRetry = viewModel::retry,
+                    selectedTab = selectedTab,
+                    onSelectTab = { selectedTab = it },
+                    generateState = generateState,
+                    settingsState = settingsState,
+                    isGenerateEnabled = generateViewModel.isGenerateEnabled(generateState),
+                    onPromptChanged = generateViewModel::onPromptChanged,
+                    onNegativeChanged = generateViewModel::onNegativeChanged,
+                    onGenerate = generateViewModel::generate,
+                    onRetry = generateViewModel::retry,
+                    onDownloadResult = generateViewModel::downloadResult,
+                    onApiKeyChanged = settingsViewModel::onApiKeyChanged,
+                    onWorkflowIdChanged = settingsViewModel::onWorkflowIdChanged,
+                    onPromptNodeIdChanged = settingsViewModel::onPromptNodeIdChanged,
+                    onPromptFieldNameChanged = settingsViewModel::onPromptFieldNameChanged,
+                    onNegativeNodeIdChanged = settingsViewModel::onNegativeNodeIdChanged,
+                    onNegativeFieldNameChanged = settingsViewModel::onNegativeFieldNameChanged,
+                    onDecodePasswordChanged = settingsViewModel::onDecodePasswordChanged,
+                    onSaveSettings = settingsViewModel::saveSettings,
+                    onClearApiKey = settingsViewModel::clearApiKey,
                     imageLoader = appContainer.imageLoader,
-                    onDownloadResult = { fileUrl, fileType, index ->
-                        viewModel.downloadResult(
-                            context = applicationContext,
-                            output = GeneratedOutput(
-                                fileUrl = fileUrl,
-                                fileType = fileType,
-                                nodeId = null,
-                            ),
-                            index = index,
-                        )
-                    },
-                    messages = viewModel.messages,
+                    generateMessages = generateViewModel.messages,
+                    settingsMessages = settingsViewModel.messages,
                 )
             }
         }
