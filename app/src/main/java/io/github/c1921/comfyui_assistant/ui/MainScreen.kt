@@ -16,23 +16,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import coil.ImageLoader
 import io.github.c1921.comfyui_assistant.R
 import io.github.c1921.comfyui_assistant.data.repository.PreviewMediaResolver
+import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
-import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
+import io.github.c1921.comfyui_assistant.feature.album.AlbumScreen
+import io.github.c1921.comfyui_assistant.feature.album.AlbumUiState
 import io.github.c1921.comfyui_assistant.feature.generate.GenerateScreen
 import io.github.c1921.comfyui_assistant.feature.generate.GenerateUiState
 import io.github.c1921.comfyui_assistant.feature.settings.SettingsScreen
 import io.github.c1921.comfyui_assistant.feature.settings.SettingsUiState
+import io.github.c1921.comfyui_assistant.ui.UiTestTags
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.merge
 
 enum class MainTab {
     Generate,
+    Album,
     Settings,
 }
 
@@ -42,6 +47,7 @@ fun MainScreen(
     selectedTab: MainTab,
     onSelectTab: (MainTab) -> Unit,
     generateState: GenerateUiState,
+    albumState: AlbumUiState,
     settingsState: SettingsUiState,
     isGenerateEnabled: Boolean,
     onPromptChanged: (String) -> Unit,
@@ -53,7 +59,11 @@ fun MainScreen(
     onClearInputImage: () -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
-    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+    onOpenAlbumForCurrentTask: () -> Unit,
+    onOpenAlbumMedia: (AlbumMediaKey) -> Unit,
+    onBackFromAlbumDetail: () -> Unit,
+    onRetryLoadAlbumMedia: () -> Unit,
+    onToggleAlbumMetadataExpanded: () -> Unit,
     onApiKeyChanged: (String) -> Unit,
     onWorkflowIdChanged: (String) -> Unit,
     onPromptNodeIdChanged: (String) -> Unit,
@@ -73,12 +83,13 @@ fun MainScreen(
     imageLoader: ImageLoader,
     previewMediaResolver: PreviewMediaResolver,
     generateMessages: Flow<String>,
+    albumMessages: Flow<String>,
     settingsMessages: Flow<String>,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(generateMessages, settingsMessages) {
-        merge(generateMessages, settingsMessages).collectLatest { message ->
+    LaunchedEffect(generateMessages, albumMessages, settingsMessages) {
+        merge(generateMessages, albumMessages, settingsMessages).collectLatest { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
@@ -97,6 +108,12 @@ fun MainScreen(
                     selected = selectedTab == MainTab.Generate,
                     onClick = { onSelectTab(MainTab.Generate) },
                     text = { Text(stringResource(R.string.tab_generate)) },
+                )
+                Tab(
+                    selected = selectedTab == MainTab.Album,
+                    onClick = { onSelectTab(MainTab.Album) },
+                    modifier = Modifier.testTag(UiTestTags.TAB_ALBUM),
+                    text = { Text(stringResource(R.string.tab_album)) },
                 )
                 Tab(
                     selected = selectedTab == MainTab.Settings,
@@ -120,7 +137,15 @@ fun MainScreen(
                     onRetry = onRetry,
                     imageLoader = imageLoader,
                     previewMediaResolver = previewMediaResolver,
-                    onDownloadResult = onDownloadResult,
+                    onOpenAlbumForCurrentTask = onOpenAlbumForCurrentTask,
+                )
+
+                MainTab.Album -> AlbumScreen(
+                    state = albumState,
+                    onOpenMedia = onOpenAlbumMedia,
+                    onBackToList = onBackFromAlbumDetail,
+                    onRetryLoadMedia = onRetryLoadAlbumMedia,
+                    onToggleMetadataExpanded = onToggleAlbumMetadataExpanded,
                 )
 
                 MainTab.Settings -> SettingsScreen(

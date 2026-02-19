@@ -25,7 +25,7 @@
     <string name="gen_result_video_desc">Generated video</string>
     <string name="gen_result_type_value">Type: %1$s</string>
     <string name="gen_result_url_value">URL: %1$s</string>
-    <string name="gen_download_button">Download to gallery</string>
+    <string name="gen_view_album_button">View in album</string>
     <string name="gen_not_set">not set</string>
     <string name="gen_workflow_id_value">workflowId: %1$s</string>
     <string name="gen_api_key_not_set">API key: not set</string>

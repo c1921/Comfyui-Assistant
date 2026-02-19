@@ -18,4 +18,5 @@ data class GenerateUiState(
     val selectedInputImageDisplayName: String = "",
     val isUploadingInputImage: Boolean = false,
     val generationState: GenerationState = GenerationState.Idle,
+    val lastArchivedTaskId: String = "",
 )

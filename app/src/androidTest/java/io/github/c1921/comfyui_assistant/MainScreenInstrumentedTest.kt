@@ -17,6 +17,8 @@ class MainScreenInstrumentedTest {
     fun tabsAndCoreButtonsAreVisible() {
         val generateNode = composeRule.onNodeWithTag(UiTestTags.GENERATE_BUTTON).fetchSemanticsNode()
         assertNotNull(generateNode)
+        composeRule.onNodeWithTag(UiTestTags.TAB_ALBUM).performClick()
+        composeRule.onNodeWithText("No archived media yet.").fetchSemanticsNode()
         composeRule.onNodeWithText("Settings").performClick()
         val saveNode = composeRule.onNodeWithTag(UiTestTags.SAVE_SETTINGS_BUTTON).fetchSemanticsNode()
         assertNotNull(saveNode)

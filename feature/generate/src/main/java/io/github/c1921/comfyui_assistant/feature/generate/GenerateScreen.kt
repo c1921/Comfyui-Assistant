@@ -74,7 +74,7 @@ fun GenerateScreen(
     onRetry: () -> Unit,
     imageLoader: ImageLoader,
     previewMediaResolver: PreviewMediaResolver,
-    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+    onOpenAlbumForCurrentTask: () -> Unit,
 ) {
     val context = LocalContext.current
     val generationState = state.generationState
@@ -293,7 +293,7 @@ fun GenerateScreen(
 
         if (generationState is GenerationState.Success) {
             Text(stringResource(R.string.gen_results_title))
-            generationState.results.forEachIndexed { index, result ->
+            generationState.results.forEach { result ->
                 when (resolveOutputKind(result, fallbackMode = state.selectedMode)) {
                     OutputMediaKind.IMAGE -> ResolvedImageResultCard(
                         result = result,
@@ -301,15 +301,13 @@ fun GenerateScreen(
                         imageLoader = imageLoader,
                         context = context,
                         previewMediaResolver = previewMediaResolver,
-                        index = index,
-                        onDownloadResult = onDownloadResult,
+                        onOpenAlbumForCurrentTask = onOpenAlbumForCurrentTask,
                     )
 
                     OutputMediaKind.VIDEO -> VideoResultCard(
                         result = result,
                         playbackUrl = result.fileUrl,
-                        index = index,
-                        onDownloadResult = onDownloadResult,
+                        onOpenAlbumForCurrentTask = onOpenAlbumForCurrentTask,
                     )
 
                     OutputMediaKind.UNKNOWN -> Unit
@@ -341,8 +339,7 @@ private fun ResolvedImageResultCard(
     imageLoader: ImageLoader,
     context: android.content.Context,
     previewMediaResolver: PreviewMediaResolver,
-    index: Int,
-    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+    onOpenAlbumForCurrentTask: () -> Unit,
 ) {
     val fallbackResolution = remember(result.fileUrl) {
         PreviewMediaResolution(
@@ -365,8 +362,7 @@ private fun ResolvedImageResultCard(
         VideoResultCard(
             result = result,
             playbackUrl = previewResolution.playbackUrl,
-            index = index,
-            onDownloadResult = onDownloadResult,
+            onOpenAlbumForCurrentTask = onOpenAlbumForCurrentTask,
         )
         return
     }
@@ -376,8 +372,7 @@ private fun ResolvedImageResultCard(
         decodePassword = decodePassword,
         imageLoader = imageLoader,
         context = context,
-        index = index,
-        onDownloadResult = onDownloadResult,
+        onOpenAlbumForCurrentTask = onOpenAlbumForCurrentTask,
     )
 }
 
@@ -387,8 +382,7 @@ private fun ImageResultCard(
     decodePassword: String,
     imageLoader: ImageLoader,
     context: android.content.Context,
-    index: Int,
-    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+    onOpenAlbumForCurrentTask: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -416,9 +410,10 @@ private fun ImageResultCard(
             Text(stringResource(R.string.gen_result_url_value, result.fileUrl))
             Spacer(modifier = Modifier.height(8.dp))
             Button(
-                onClick = { onDownloadResult(result, index + 1) },
+                onClick = onOpenAlbumForCurrentTask,
+                modifier = Modifier.testTag(UiTestTags.VIEW_ALBUM_BUTTON),
             ) {
-                Text(stringResource(R.string.gen_download_button))
+                Text(stringResource(R.string.gen_view_album_button))
             }
         }
     }
@@ -428,8 +423,7 @@ private fun ImageResultCard(
 private fun VideoResultCard(
     result: GeneratedOutput,
     playbackUrl: String,
-    index: Int,
-    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+    onOpenAlbumForCurrentTask: () -> Unit,
 ) {
     val videoUri = remember(playbackUrl) { Uri.parse(playbackUrl) }
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -465,9 +459,10 @@ private fun VideoResultCard(
             Text(stringResource(R.string.gen_result_url_value, result.fileUrl))
             Spacer(modifier = Modifier.height(8.dp))
             Button(
-                onClick = { onDownloadResult(result, index + 1) },
+                onClick = onOpenAlbumForCurrentTask,
+                modifier = Modifier.testTag(UiTestTags.VIEW_ALBUM_BUTTON),
             ) {
-                Text(stringResource(R.string.gen_download_button))
+                Text(stringResource(R.string.gen_view_album_button))
             }
         }
     }

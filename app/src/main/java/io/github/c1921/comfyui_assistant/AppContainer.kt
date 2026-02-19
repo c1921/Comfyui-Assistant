@@ -7,9 +7,11 @@ import io.github.c1921.comfyui_assistant.data.local.SecureConfigStore
 import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckAutoDecodeDecoder
 import io.github.c1921.comfyui_assistant.data.network.RunningHubApiClient
 import io.github.c1921.comfyui_assistant.data.repository.DuckPreviewMediaResolver
+import io.github.c1921.comfyui_assistant.data.repository.FileBackedInternalAlbumRepository
 import io.github.c1921.comfyui_assistant.data.repository.FileBackedInputImageSelectionStore
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
 import io.github.c1921.comfyui_assistant.data.repository.ImageDownloader
+import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
 import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
 import io.github.c1921.comfyui_assistant.data.repository.InputImageSelectionStore
 import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
@@ -30,6 +32,7 @@ class AppContainer(
     val generationRepository: GenerationRepository = RunningHubGenerationRepository(apiService)
     val inputImageUploader: InputImageUploader = RunningHubInputImageUploader(context, apiService)
     val inputImageSelectionStore: InputImageSelectionStore = FileBackedInputImageSelectionStore(context)
+    val internalAlbumRepository: InternalAlbumRepository = FileBackedInternalAlbumRepository(context, okHttpClient)
     val mediaSaver: MediaSaver = ImageDownloader(context, okHttpClient)
     val previewMediaResolver: PreviewMediaResolver = DuckPreviewMediaResolver(context, okHttpClient)
     val imageLoader: ImageLoader = ImageLoader.Builder(context)

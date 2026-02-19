@@ -4,19 +4,21 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import io.github.c1921.comfyui_assistant.data.decoder.fallbackOrNull
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
+import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
 import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
 import io.github.c1921.comfyui_assistant.data.repository.InputImageSelectionStore
-import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
 import io.github.c1921.comfyui_assistant.data.repository.PersistedInputImageSelection
+import io.github.c1921.comfyui_assistant.data.repository.WorkflowRequestBuilder
 import io.github.c1921.comfyui_assistant.domain.ConfigDraftStore
+import io.github.c1921.comfyui_assistant.domain.GenerationRequestSnapshot
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
-import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
+import io.github.c1921.comfyui_assistant.domain.ImagePresetSnapshot
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
+import io.github.c1921.comfyui_assistant.domain.RequestNodeField
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,7 +37,7 @@ class GenerateViewModel(
     private val generationRepository: GenerationRepository,
     private val inputImageUploader: InputImageUploader,
     private val inputImageSelectionStore: InputImageSelectionStore,
-    private val mediaSaver: MediaSaver,
+    private val internalAlbumRepository: InternalAlbumRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GenerateUiState())
     val uiState: StateFlow<GenerateUiState> = _uiState.asStateFlow()
@@ -43,9 +45,11 @@ class GenerateViewModel(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
+    private val _openAlbumRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val openAlbumRequests: SharedFlow<String> = _openAlbumRequests.asSharedFlow()
+
     private var generationJob: Job? = null
     private var lastSubmittedInput: GenerationInput? = null
-    private val notifiedDecodeFallbackUrls = mutableSetOf<String>()
     private var imageModeSelection: PersistedInputImageSelection? = null
     private var videoModeSelection: PersistedInputImageSelection? = null
 
@@ -215,35 +219,17 @@ class GenerateViewModel(
         executeGeneration(input)
     }
 
-    fun downloadResult(
-        output: GeneratedOutput,
-        index: Int,
-    ) {
+    fun openLastArchivedTaskInAlbum() {
         val state = _uiState.value
         val taskId = when (val generationState = state.generationState) {
             is GenerationState.Success -> generationState.taskId
-            else -> "unknown_task"
+            else -> state.lastArchivedTaskId
+        }.trim()
+        if (taskId.isBlank()) {
+            emitMessage("No archived task yet.")
+            return
         }
-        viewModelScope.launch {
-            mediaSaver.saveToGallery(
-                output = output,
-                taskId = taskId,
-                index = index,
-                decodePassword = state.config.decodePassword,
-            ).onSuccess { downloadResult ->
-                emitMessage("Saved to gallery: ${downloadResult.fileName}")
-                val fallback = downloadResult.decodeOutcome?.fallbackOrNull()
-                if (
-                    fallback != null &&
-                    fallback.shouldNotifyUser &&
-                    notifiedDecodeFallbackUrls.add(output.fileUrl)
-                ) {
-                    emitMessage(fallback.message)
-                }
-            }.onFailure { error ->
-                emitMessage("Save failed: ${error.message.orEmpty()}")
-            }
-        }
+        _openAlbumRequests.tryEmit(taskId)
     }
 
     private fun loadPersistedConfig() {
@@ -321,12 +307,31 @@ class GenerateViewModel(
 
     private fun executeGeneration(input: GenerationInput) {
         val config = _uiState.value.config
+        val requestSnapshot = buildRequestSnapshot(config, input)
         generationJob = viewModelScope.launch {
             generationRepository.generateAndPoll(config, input).collect { generationState ->
                 _uiState.update { it.copy(generationState = generationState) }
                 when (generationState) {
                     is GenerationState.Success -> {
                         emitMessage("Generation completed: ${generationState.results.size} result(s).")
+                        val archiveResult = internalAlbumRepository.archiveGeneration(
+                            requestSnapshot = requestSnapshot,
+                            successState = generationState,
+                            decodePassword = config.decodePassword,
+                        )
+                        archiveResult.onSuccess { result ->
+                            _uiState.update { it.copy(lastArchivedTaskId = result.taskId) }
+                            if (result.failedCount > 0) {
+                                emitMessage(
+                                    "Saved internally: ${result.successCount}/${result.totalOutputs}, failed: ${result.failedCount}",
+                                )
+                            } else {
+                                emitMessage("Saved internally: ${result.successCount}/${result.totalOutputs}")
+                            }
+                        }.onFailure { error ->
+                            val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
+                            emitMessage("Internal save failed: $reason")
+                        }
                     }
 
                     is GenerationState.Failed -> emitMessage(generationState.message)
@@ -335,6 +340,43 @@ class GenerateViewModel(
                 }
             }
         }
+    }
+
+    private fun buildRequestSnapshot(
+        config: io.github.c1921.comfyui_assistant.domain.WorkflowConfig,
+        input: GenerationInput,
+    ): GenerationRequestSnapshot {
+        val nodeInfoList = WorkflowRequestBuilder.buildNodeInfoList(config, input).map { node ->
+            RequestNodeField(
+                nodeId = node.nodeId,
+                fieldName = node.fieldName,
+                fieldValue = node.fieldValue.toString(),
+            )
+        }
+        val workflowId = when (input.mode) {
+            GenerationMode.IMAGE -> config.workflowId.trim()
+            GenerationMode.VIDEO -> config.videoWorkflowId.trim()
+        }
+        val imagePreset = if (input.mode == GenerationMode.IMAGE) {
+            ImagePresetSnapshot(
+                id = input.imagePreset.id,
+                width = input.imagePreset.width,
+                height = input.imagePreset.height,
+            )
+        } else {
+            null
+        }
+        return GenerationRequestSnapshot(
+            requestSentAtEpochMs = System.currentTimeMillis(),
+            generationMode = input.mode,
+            workflowId = workflowId,
+            prompt = input.prompt,
+            negative = input.negative,
+            imagePreset = imagePreset,
+            videoLengthFrames = input.videoLengthFrames,
+            uploadedImageFileName = input.uploadedImageFileName.trim().ifBlank { null },
+            nodeInfoList = nodeInfoList,
+        )
     }
 
     private fun updateGenerateFailure(message: String) {
@@ -369,7 +411,7 @@ class GenerateViewModel(
         private val generationRepository: GenerationRepository,
         private val inputImageUploader: InputImageUploader,
         private val inputImageSelectionStore: InputImageSelectionStore,
-        private val mediaSaver: MediaSaver,
+        private val internalAlbumRepository: InternalAlbumRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -379,7 +421,7 @@ class GenerateViewModel(
                 generationRepository = generationRepository,
                 inputImageUploader = inputImageUploader,
                 inputImageSelectionStore = inputImageSelectionStore,
-                mediaSaver = mediaSaver,
+                internalAlbumRepository = internalAlbumRepository,
             ) as T
         }
     }

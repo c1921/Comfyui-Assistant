@@ -54,7 +54,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -85,7 +85,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -136,7 +136,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -179,7 +179,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = resolverAsDecodedVideo(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -211,7 +211,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -244,7 +244,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -275,7 +275,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -306,7 +306,7 @@ class GenerateScreenInstrumentedTest {
                 onRetry = {},
                 imageLoader = imageLoader,
                 previewMediaResolver = passthroughResolver(),
-                onDownloadResult = { _, _ -> },
+                onOpenAlbumForCurrentTask = {},
             )
         }
 
@@ -343,3 +343,4 @@ class GenerateScreenInstrumentedTest {
         }
     }
 }
+

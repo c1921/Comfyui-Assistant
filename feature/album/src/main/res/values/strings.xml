@@ -1,0 +1,33 @@
+<resources>
+    <string name="album_title">Internal album</string>
+    <string name="album_empty">No archived media yet.</string>
+    <string name="album_video_badge">VIDEO</string>
+    <string name="album_back_to_list">Back to list</string>
+    <string name="album_retry_load">Retry</string>
+    <string name="album_detail_key_value">%1$s #%2$d</string>
+    <string name="album_detail_error">Failed to load task: %1$s</string>
+    <string name="album_media_missing">Local file is missing.</string>
+    <string name="album_metadata_show">Metadata</string>
+    <string name="album_metadata_hide">Hide metadata</string>
+    <string name="album_task_id_value">taskId: %1$s</string>
+    <string name="album_workflow_id_value">workflowId: %1$s</string>
+    <string name="album_mode_value">mode: %1$s</string>
+    <string name="album_prompt_value">prompt: %1$s</string>
+    <string name="album_negative_value">negative: %1$s</string>
+    <string name="album_saved_time_value">saved at: %1$s</string>
+    <string name="album_request_time_value">requested at: %1$s</string>
+    <string name="album_counts_value">saved: %1$d/%2$d, failed: %3$d</string>
+    <string name="album_video_frames_value">video frames: %1$d</string>
+    <string name="album_uploaded_file_value">uploaded image: %1$s</string>
+    <string name="album_prompt_tips_value">prompt tips: %1$s</string>
+    <string name="album_node_info_title">nodeInfoList</string>
+    <string name="album_failures_title">failures</string>
+    <string name="album_media_title">media</string>
+    <string name="album_media_path_value">path: %1$s</string>
+    <string name="album_media_type_value">type: %1$s</string>
+    <string name="album_media_decode_value">decode: %1$s</string>
+    <string name="album_media_size_value">size: %1$d bytes</string>
+    <string name="album_media_source_url_value">sourceUrl: %1$s</string>
+    <string name="album_media_source_type_value">sourceType: %1$s</string>
+    <string name="album_media_source_node_value">sourceNodeId: %1$s</string>
+</resources>

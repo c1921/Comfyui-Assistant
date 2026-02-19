@@ -2,24 +2,28 @@ package io.github.c1921.comfyui_assistant.feature.generate
 
 import android.net.Uri
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
-import io.github.c1921.comfyui_assistant.data.repository.DownloadToGalleryResult
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
+import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
 import io.github.c1921.comfyui_assistant.data.repository.InputImageSelectionStore
 import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
-import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
 import io.github.c1921.comfyui_assistant.data.repository.PersistedInputImageSelection
 import io.github.c1921.comfyui_assistant.data.repository.PersistedInputImageSelections
+import io.github.c1921.comfyui_assistant.domain.AlbumSaveResult
+import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
+import io.github.c1921.comfyui_assistant.domain.AlbumMediaSummary
+import io.github.c1921.comfyui_assistant.domain.AlbumTaskDetail
+import io.github.c1921.comfyui_assistant.domain.AlbumTaskSummary
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
+import io.github.c1921.comfyui_assistant.domain.GenerationRequestSnapshot
 import io.github.c1921.comfyui_assistant.domain.GenerationState
-import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.InMemoryConfigDraftStore
-import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -30,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,7 +54,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -71,7 +76,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -97,7 +102,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -123,7 +128,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -148,7 +153,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -172,7 +177,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -195,7 +200,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -218,7 +223,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -242,7 +247,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -266,7 +271,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -294,7 +299,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = uploader,
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -320,7 +325,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = uploader,
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -349,7 +354,7 @@ class GenerateViewModelTest {
             generationRepository = generationRepository,
             inputImageUploader = uploader,
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -374,7 +379,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -413,7 +418,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = selectionStore,
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -452,7 +457,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = selectionStore,
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -486,7 +491,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = FakeInputImageSelectionStore(),
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
 
         advanceUntilIdle()
@@ -524,7 +529,7 @@ class GenerateViewModelTest {
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
             inputImageSelectionStore = selectionStore,
-            mediaSaver = FakeMediaSaver(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
         )
         val messages = mutableListOf<String>()
         val collectJob = launch { viewModel.messages.collect { messages.add(it) } }
@@ -536,6 +541,82 @@ class GenerateViewModelTest {
 
         assertEquals(selectedUri, viewModel.uiState.value.selectedInputImageUri)
         assertTrue(messages.any { it.contains("could not be persisted") })
+        collectJob.cancel()
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `generation success archives outputs and stores lastArchivedTaskId`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val successState = GenerationState.Success(
+            taskId = "task-archive-1",
+            results = listOf(
+                io.github.c1921.comfyui_assistant.domain.GeneratedOutput(
+                    fileUrl = "https://example.com/output.png",
+                    fileType = "png",
+                    nodeId = "9",
+                ),
+            ),
+            promptTipsNodeErrors = null,
+        )
+        val generationRepository = FakeGenerationRepository(flowOf(successState))
+        val albumRepository = FakeInternalAlbumRepository()
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            internalAlbumRepository = albumRepository,
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("archive me")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(1, albumRepository.archiveCallCount)
+        assertNotNull(albumRepository.lastRequestSnapshot)
+        assertEquals("task-archive-1", viewModel.uiState.value.lastArchivedTaskId)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `openLastArchivedTaskInAlbum emits archived taskId`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val successState = GenerationState.Success(
+            taskId = "task-open-album-1",
+            results = listOf(
+                io.github.c1921.comfyui_assistant.domain.GeneratedOutput(
+                    fileUrl = "https://example.com/output.png",
+                    fileType = "png",
+                    nodeId = "9",
+                ),
+            ),
+            promptTipsNodeErrors = null,
+        )
+        val generationRepository = FakeGenerationRepository(flowOf(successState))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+        )
+        val emittedTaskIds = mutableListOf<String>()
+        val collectJob = launch { viewModel.openAlbumRequests.collect { emittedTaskIds += it } }
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("open album")
+        viewModel.generate()
+        advanceUntilIdle()
+        viewModel.openLastArchivedTaskInAlbum()
+        advanceUntilIdle()
+
+        assertTrue(emittedTaskIds.contains("task-open-album-1"))
         collectJob.cancel()
         Dispatchers.resetMain()
     }
@@ -650,20 +731,54 @@ class GenerateViewModelTest {
         }
     }
 
-    private class FakeMediaSaver : MediaSaver {
-        override suspend fun saveToGallery(
-            output: GeneratedOutput,
-            taskId: String,
-            index: Int,
+    private class FakeInternalAlbumRepository(
+        private val archiveResultProvider: (
+            requestSnapshot: GenerationRequestSnapshot,
+            successState: GenerationState.Success,
             decodePassword: String,
-        ): Result<DownloadToGalleryResult> {
-            return Result.success(
-                DownloadToGalleryResult(
-                    fileName = "fake.png",
-                    savedKind = OutputMediaKind.IMAGE,
-                    decodeOutcome = null,
-                )
+        ) -> Result<AlbumSaveResult> = { _, successState, _ ->
+            Result.success(
+                AlbumSaveResult(
+                    taskId = successState.taskId,
+                    totalOutputs = successState.results.size,
+                    successCount = successState.results.size,
+                    failedCount = 0,
+                    failures = emptyList(),
+                ),
             )
+        },
+    ) : InternalAlbumRepository {
+        val summariesFlow = MutableStateFlow<List<AlbumTaskSummary>>(emptyList())
+        val mediaSummariesFlow = MutableStateFlow<List<AlbumMediaSummary>>(emptyList())
+        var archiveCallCount: Int = 0
+        var lastRequestSnapshot: GenerationRequestSnapshot? = null
+
+        override suspend fun archiveGeneration(
+            requestSnapshot: GenerationRequestSnapshot,
+            successState: GenerationState.Success,
+            decodePassword: String,
+        ): Result<AlbumSaveResult> {
+            archiveCallCount += 1
+            lastRequestSnapshot = requestSnapshot
+            return archiveResultProvider(requestSnapshot, successState, decodePassword)
+        }
+
+        override fun observeTaskSummaries(): Flow<List<AlbumTaskSummary>> = summariesFlow
+        override fun observeMediaSummaries(): Flow<List<AlbumMediaSummary>> = mediaSummariesFlow
+
+        override suspend fun loadTaskDetail(taskId: String): Result<AlbumTaskDetail> {
+            return Result.failure(IllegalStateException("Not implemented in test fake."))
+        }
+
+        override suspend fun hasTask(taskId: String): Boolean = false
+
+        override suspend fun findFirstImageKey(taskId: String): Result<AlbumMediaKey?> {
+            return Result.success(null)
+        }
+
+        override suspend fun findFirstMediaKey(taskId: String): Result<AlbumMediaKey?> {
+            return Result.success(null)
         }
     }
 }
+
