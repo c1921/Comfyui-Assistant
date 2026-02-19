@@ -1,16 +1,20 @@
 <resources>
+    <string name="gen_mode_image">Image</string>
+    <string name="gen_mode_video">Video</string>
     <string name="gen_prompt_label">Prompt</string>
     <string name="gen_prompt_placeholder">Enter positive prompt</string>
     <string name="gen_negative_label">Negative (optional)</string>
     <string name="gen_negative_placeholder">Enter negative prompt</string>
     <string name="gen_config_hint">Complete API key, workflowId, prompt nodeId and prompt fieldName first.</string>
+    <string name="gen_video_config_hint">Complete API key, video workflowId, video prompt nodeId and video prompt fieldName first.</string>
     <string name="gen_ratio_label">Image ratio</string>
     <string name="gen_ratio_value">%1$s (%2$dx%3$d)</string>
     <string name="gen_ratio_mapping_hint">Selected ratio requires width/height mapping in Settings.</string>
-    <string name="gen_running_button">Running…</string>
+    <string name="gen_running_button">Running...</string>
     <string name="gen_generate_button">Generate</string>
     <string name="gen_results_title">Results</string>
     <string name="gen_result_image_desc">Generated image</string>
+    <string name="gen_result_video_desc">Generated video</string>
     <string name="gen_result_type_value">Type: %1$s</string>
     <string name="gen_result_url_value">URL: %1$s</string>
     <string name="gen_download_button">Download to gallery</string>

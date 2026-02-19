@@ -9,11 +9,13 @@ import io.github.c1921.comfyui_assistant.data.network.OutputsResponse
 import io.github.c1921.comfyui_assistant.data.network.QueryOutputsRequest
 import io.github.c1921.comfyui_assistant.data.network.RunningHubApiService
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -62,7 +64,11 @@ class RunningHubGenerationRepositoryTest {
 
         val states = repository.generateAndPoll(
             config = validConfig(),
-            input = GenerationInput(prompt = "hello", negative = ""),
+            input = GenerationInput(
+                prompt = "hello",
+                negative = "",
+                mode = GenerationMode.IMAGE,
+            ),
         ).toList()
 
         assertTrue(states.any { it is GenerationState.Queued })
@@ -113,12 +119,69 @@ class RunningHubGenerationRepositoryTest {
 
         val states = repository.generateAndPoll(
             config = validConfig(),
-            input = GenerationInput(prompt = "hello", negative = ""),
+            input = GenerationInput(
+                prompt = "hello",
+                negative = "",
+                mode = GenerationMode.IMAGE,
+            ),
         ).toList()
 
         val failed = states.last() as GenerationState.Failed
         assertTrue(failed.message.contains("missing input"))
         assertTrue(failed.failedReason?.nodeName == "KSampler")
+    }
+
+    @Test
+    fun `generateAndPoll uses video workflowId in video mode`() = runTest {
+        val fakeService = FakeRunningHubApiService(
+            createResponse = CreateTaskResponse(
+                code = 0,
+                msg = "success",
+                data = CreateTaskData(
+                    netWssUrl = null,
+                    taskId = JsonPrimitive("task-3"),
+                    clientId = null,
+                    taskStatus = "QUEUED",
+                    promptTips = null,
+                ),
+            ),
+            outputsResponses = mutableListOf(
+                OutputsResponse(
+                    code = 0,
+                    msg = "success",
+                    data = JsonParser.parseString(
+                        """
+                        [
+                          {"fileUrl":"https://example.com/output.mp4","fileType":"mp4","nodeId":"21"}
+                        ]
+                        """.trimIndent()
+                    ),
+                ),
+            ),
+        )
+
+        val repository = RunningHubGenerationRepository(
+            apiService = fakeService,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+            pollIntervalMs = 0L,
+            maxPollCount = 5,
+        )
+
+        repository.generateAndPoll(
+            config = validConfig().copy(
+                videoWorkflowId = "video-workflow-id",
+                videoPromptNodeId = "12",
+                videoPromptFieldName = "text",
+            ),
+            input = GenerationInput(
+                prompt = "video prompt",
+                negative = "",
+                mode = GenerationMode.VIDEO,
+            ),
+        ).toList()
+
+        assertEquals("video-workflow-id", fakeService.lastCreateRequest?.workflowId)
+        assertEquals(1, fakeService.lastCreateRequest?.nodeInfoList?.size)
     }
 
     private fun validConfig(): WorkflowConfig {
@@ -134,10 +197,15 @@ class RunningHubGenerationRepositoryTest {
         private val createResponse: CreateTaskResponse,
         private val outputsResponses: MutableList<OutputsResponse>,
     ) : RunningHubApiService {
+        var lastCreateRequest: CreateTaskRequest? = null
+
         override suspend fun createWorkflowTask(
             authorization: String,
             request: CreateTaskRequest,
-        ): CreateTaskResponse = createResponse
+        ): CreateTaskResponse {
+            lastCreateRequest = request
+            return createResponse
+        }
 
         override suspend fun queryWorkflowOutputs(
             authorization: String,

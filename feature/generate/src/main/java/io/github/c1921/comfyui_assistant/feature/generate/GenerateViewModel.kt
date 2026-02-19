@@ -9,6 +9,7 @@ import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
 import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
 import io.github.c1921.comfyui_assistant.domain.ConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
@@ -57,12 +58,17 @@ class GenerateViewModel(
         _uiState.update { it.copy(selectedImagePreset = value) }
     }
 
+    fun onGenerationModeChanged(value: GenerationMode) {
+        _uiState.update { it.copy(selectedMode = value) }
+    }
+
     fun isGenerateEnabled(state: GenerateUiState): Boolean {
         return WorkflowConfigValidator.validateForGenerate(
             config = state.config,
             input = GenerationInput(
                 prompt = state.prompt,
                 negative = state.negative,
+                mode = state.selectedMode,
                 imagePreset = state.selectedImagePreset,
             ),
         ) == null
@@ -77,6 +83,7 @@ class GenerateViewModel(
         val input = GenerationInput(
             prompt = state.prompt.trim(),
             negative = state.negative.trim(),
+            mode = state.selectedMode,
             imagePreset = state.selectedImagePreset,
         )
         lastSubmittedInput = input
@@ -113,7 +120,7 @@ class GenerateViewModel(
                 decodePassword = state.config.decodePassword,
             ).onSuccess { downloadResult ->
                 emitMessage("Saved to gallery: ${downloadResult.fileName}")
-                val fallback = downloadResult.decodeOutcome.fallbackOrNull()
+                val fallback = downloadResult.decodeOutcome?.fallbackOrNull()
                 if (
                     fallback != null &&
                     fallback.shouldNotifyUser &&

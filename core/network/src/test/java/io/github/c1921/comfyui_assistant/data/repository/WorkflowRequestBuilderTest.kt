@@ -1,6 +1,7 @@
 package io.github.c1921.comfyui_assistant.data.repository
 
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
@@ -20,6 +21,7 @@ class WorkflowRequestBuilderTest {
         val input = GenerationInput(
             prompt = "a cat in city",
             negative = "blurry",
+            mode = GenerationMode.IMAGE,
         )
 
         val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
@@ -44,6 +46,7 @@ class WorkflowRequestBuilderTest {
         val input = GenerationInput(
             prompt = "a cat in city",
             negative = "",
+            mode = GenerationMode.IMAGE,
         )
 
         val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
@@ -62,6 +65,7 @@ class WorkflowRequestBuilderTest {
         val input = GenerationInput(
             prompt = "a cat in city",
             negative = "",
+            mode = GenerationMode.IMAGE,
             imagePreset = ImageAspectPreset.RATIO_16_9,
         )
 
@@ -86,6 +90,7 @@ class WorkflowRequestBuilderTest {
         val input = GenerationInput(
             prompt = "a cat in city",
             negative = "",
+            mode = GenerationMode.IMAGE,
             imagePreset = ImageAspectPreset.RATIO_16_9,
         )
 
@@ -96,7 +101,28 @@ class WorkflowRequestBuilderTest {
     }
 
     @Test
-    fun `validateForGenerate returns null when required fields are present`() {
+    fun `buildNodeInfoList uses video prompt mapping in video mode`() {
+        val config = WorkflowConfig(
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+        )
+        val input = GenerationInput(
+            prompt = "a panda dancing",
+            negative = "unused",
+            mode = GenerationMode.VIDEO,
+            imagePreset = ImageAspectPreset.RATIO_16_9,
+        )
+
+        val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
+
+        assertEquals(1, result.size)
+        assertEquals("12", result[0].nodeId)
+        assertEquals("text", result[0].fieldName)
+        assertEquals("a panda dancing", result[0].fieldValue)
+    }
+
+    @Test
+    fun `validateForGenerate returns null when required image fields are present`() {
         val config = WorkflowConfig(
             apiKey = "test-key",
             workflowId = "workflow-1",
@@ -106,7 +132,11 @@ class WorkflowRequestBuilderTest {
 
         val error = WorkflowConfigValidator.validateForGenerate(
             config = config,
-            input = GenerationInput(prompt = "test prompt", negative = ""),
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.IMAGE,
+            ),
         )
 
         assertNull(error)

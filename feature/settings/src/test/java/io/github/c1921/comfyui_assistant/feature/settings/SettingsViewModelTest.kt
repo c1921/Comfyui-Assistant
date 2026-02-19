@@ -10,9 +10,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -59,7 +59,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `saveSettings persists with size nodeId`() = runTest {
+    fun `saveSettings does not persist when video mapping is incomplete`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         val repository = FakeConfigRepository()
@@ -69,13 +69,58 @@ class SettingsViewModelTest {
         )
 
         advanceUntilIdle()
-        viewModel.onSizeNodeIdChanged("5")
+        viewModel.onVideoWorkflowIdChanged("video-workflow")
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertFalse(repository.saveCalled)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `saveSettings persists when video mapping is complete`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onVideoWorkflowIdChanged("video-workflow")
+        viewModel.onVideoPromptNodeIdChanged("12")
+        viewModel.onVideoPromptFieldNameChanged("text")
         advanceUntilIdle()
         viewModel.saveSettings()
         advanceUntilIdle()
 
         assertTrue(repository.saveCalled)
-        assertEquals("5", repository.currentConfig.sizeNodeId)
+        assertEquals("video-workflow", repository.currentConfig.videoWorkflowId)
+        assertEquals("12", repository.currentConfig.videoPromptNodeId)
+        assertEquals("text", repository.currentConfig.videoPromptFieldName)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `saveSettings persists when video mapping is empty`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+        )
+
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertEquals("", repository.currentConfig.videoWorkflowId)
+        assertEquals("", repository.currentConfig.videoPromptNodeId)
+        assertEquals("", repository.currentConfig.videoPromptFieldName)
         Dispatchers.resetMain()
     }
 

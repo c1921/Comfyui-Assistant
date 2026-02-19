@@ -59,6 +59,18 @@ class SettingsViewModel(
         configDraftStore.update { it.copy(sizeNodeId = value) }
     }
 
+    fun onVideoWorkflowIdChanged(value: String) {
+        configDraftStore.update { it.copy(videoWorkflowId = value) }
+    }
+
+    fun onVideoPromptNodeIdChanged(value: String) {
+        configDraftStore.update { it.copy(videoPromptNodeId = value) }
+    }
+
+    fun onVideoPromptFieldNameChanged(value: String) {
+        configDraftStore.update { it.copy(videoPromptFieldName = value) }
+    }
+
     fun onDecodePasswordChanged(value: String) {
         configDraftStore.update { it.copy(decodePassword = value) }
     }
@@ -66,7 +78,7 @@ class SettingsViewModel(
     fun saveSettings() {
         val current = _uiState.value
         val config = current.toWorkflowConfig()
-        val mappingError = WorkflowConfigValidator.validateMappingConsistency(config)
+        val mappingError = WorkflowConfigValidator.validateForSettings(config)
         if (mappingError != null) {
             emitMessage(mappingError)
             return
@@ -105,6 +117,9 @@ class SettingsViewModel(
                         negativeNodeId = config.negativeNodeId,
                         negativeFieldName = config.negativeFieldName,
                         sizeNodeId = config.sizeNodeId,
+                        videoWorkflowId = config.videoWorkflowId,
+                        videoPromptNodeId = config.videoPromptNodeId,
+                        videoPromptFieldName = config.videoPromptFieldName,
                         decodePassword = config.decodePassword,
                     )
                 }

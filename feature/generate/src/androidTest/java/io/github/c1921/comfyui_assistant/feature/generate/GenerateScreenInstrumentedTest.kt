@@ -1,12 +1,16 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import coil.ImageLoader
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
+import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 import org.junit.Rule
@@ -36,6 +40,7 @@ class GenerateScreenInstrumentedTest {
                 isGenerateEnabled = true,
                 onPromptChanged = {},
                 onNegativeChanged = {},
+                onGenerationModeChanged = {},
                 onImagePresetChanged = {},
                 onGenerate = {},
                 onRetry = {},
@@ -48,10 +53,11 @@ class GenerateScreenInstrumentedTest {
     }
 
     @Test
-    fun ratioSelector_andMissingMappingHint_areVisible_forNonSquarePreset() {
+    fun modeSwitch_isVisible_andVideoModeHidesRatioSelector() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val imageLoader = ImageLoader.Builder(context).build()
         val state = GenerateUiState(
+            selectedMode = GenerationMode.VIDEO,
             selectedImagePreset = ImageAspectPreset.RATIO_16_9,
         )
 
@@ -61,6 +67,7 @@ class GenerateScreenInstrumentedTest {
                 isGenerateEnabled = false,
                 onPromptChanged = {},
                 onNegativeChanged = {},
+                onGenerationModeChanged = {},
                 onImagePresetChanged = {},
                 onGenerate = {},
                 onRetry = {},
@@ -69,8 +76,55 @@ class GenerateScreenInstrumentedTest {
             )
         }
 
-        composeRule.onNodeWithTag(UiTestTags.RATIO_SELECTOR).assertIsDisplayed()
-        composeRule.onNodeWithText("Selected ratio requires width/height mapping in Settings.")
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.GEN_MODE_IMAGE_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.GEN_MODE_VIDEO_BUTTON).assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.RATIO_SELECTOR).assertCountEquals(0)
+        composeRule.onNodeWithText(
+            "Complete API key, video workflowId, video prompt nodeId and video prompt fieldName first."
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun mixedOutputs_renderImageAndVideoCards() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val imageLoader = ImageLoader.Builder(context).build()
+        val state = GenerateUiState(
+            selectedMode = GenerationMode.VIDEO,
+            generationState = GenerationState.Success(
+                taskId = "task-2",
+                results = listOf(
+                    GeneratedOutput(
+                        fileUrl = "https://example.com/output.png",
+                        fileType = "png",
+                        nodeId = "1",
+                    ),
+                    GeneratedOutput(
+                        fileUrl = "https://example.com/output.mp4",
+                        fileType = "mp4",
+                        nodeId = "2",
+                    ),
+                ),
+                promptTipsNodeErrors = null,
+            ),
+        )
+
+        composeRule.setContent {
+            GenerateScreen(
+                state = state,
+                isGenerateEnabled = true,
+                onPromptChanged = {},
+                onNegativeChanged = {},
+                onGenerationModeChanged = {},
+                onImagePresetChanged = {},
+                onGenerate = {},
+                onRetry = {},
+                imageLoader = imageLoader,
+                onDownloadResult = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithText("URL: https://example.com/output.png").assertIsDisplayed()
+        composeRule.onNodeWithText("URL: https://example.com/output.mp4").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.VIDEO_RESULT_PLAYER).assertIsDisplayed()
     }
 }

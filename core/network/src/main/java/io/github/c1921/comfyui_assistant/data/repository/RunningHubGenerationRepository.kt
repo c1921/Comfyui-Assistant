@@ -5,6 +5,7 @@ import io.github.c1921.comfyui_assistant.data.network.QueryOutputsRequest
 import io.github.c1921.comfyui_assistant.data.network.RunningHubApiService
 import io.github.c1921.comfyui_assistant.data.network.RunningHubParsers
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
@@ -44,12 +45,16 @@ class RunningHubGenerationRepository(
         }
 
         emit(GenerationState.Submitting)
+        val workflowId = when (input.mode) {
+            GenerationMode.IMAGE -> config.workflowId.trim()
+            GenerationMode.VIDEO -> config.videoWorkflowId.trim()
+        }
         val createResponse = try {
             apiService.createWorkflowTask(
                 authorization = authHeader(config.apiKey),
                 request = CreateTaskRequest(
                     apiKey = config.apiKey.trim(),
-                    workflowId = config.workflowId.trim(),
+                    workflowId = workflowId,
                     nodeInfoList = WorkflowRequestBuilder.buildNodeInfoList(config, input),
                     addMetadata = true,
                 ),

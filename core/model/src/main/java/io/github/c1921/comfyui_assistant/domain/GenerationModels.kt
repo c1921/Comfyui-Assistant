@@ -1,5 +1,7 @@
 package io.github.c1921.comfyui_assistant.domain
 
+import java.util.Locale
+
 data class WorkflowConfig(
     val apiKey: String = "",
     val workflowId: String = "",
@@ -8,12 +10,21 @@ data class WorkflowConfig(
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
     val sizeNodeId: String = "",
+    val videoWorkflowId: String = "",
+    val videoPromptNodeId: String = "",
+    val videoPromptFieldName: String = "",
     val decodePassword: String = "",
 )
+
+enum class GenerationMode {
+    IMAGE,
+    VIDEO,
+}
 
 data class GenerationInput(
     val prompt: String,
     val negative: String,
+    val mode: GenerationMode = GenerationMode.IMAGE,
     val imagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
 )
 
@@ -67,11 +78,36 @@ enum class ImageAspectPreset(
     );
 }
 
+enum class OutputMediaKind {
+    IMAGE,
+    VIDEO,
+    UNKNOWN,
+}
+
 data class GeneratedOutput(
     val fileUrl: String,
     val fileType: String,
     val nodeId: String?,
-)
+) {
+    fun detectMediaKind(): OutputMediaKind {
+        val normalizedType = fileType.trim().lowercase(Locale.ROOT)
+        if (normalizedType in IMAGE_EXTENSIONS) return OutputMediaKind.IMAGE
+        if (normalizedType in VIDEO_EXTENSIONS) return OutputMediaKind.VIDEO
+
+        val extension = fileUrl.substringAfterLast('.', "")
+            .substringBefore('?')
+            .trim()
+            .lowercase(Locale.ROOT)
+        if (extension in IMAGE_EXTENSIONS) return OutputMediaKind.IMAGE
+        if (extension in VIDEO_EXTENSIONS) return OutputMediaKind.VIDEO
+        return OutputMediaKind.UNKNOWN
+    }
+
+    private companion object {
+        val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+        val VIDEO_EXTENSIONS = setOf("mp4", "mov", "webm", "m4v", "mkv")
+    }
+}
 
 data class FailedReason(
     val nodeName: String?,

@@ -1,5 +1,8 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
+import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,29 +15,37 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckDecodeRequestParams.enableDuckAutoDecode
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
+import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 
@@ -45,6 +56,7 @@ fun GenerateScreen(
     isGenerateEnabled: Boolean,
     onPromptChanged: (String) -> Unit,
     onNegativeChanged: (String) -> Unit,
+    onGenerationModeChanged: (GenerationMode) -> Unit,
     onImagePresetChanged: (ImageAspectPreset) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
@@ -53,13 +65,15 @@ fun GenerateScreen(
 ) {
     val context = LocalContext.current
     val generationState = state.generationState
+    val isVideoMode = state.selectedMode == GenerationMode.VIDEO
     val isProcessing = generationState is GenerationState.ValidatingConfig ||
         generationState is GenerationState.Submitting ||
         generationState is GenerationState.Queued ||
         generationState is GenerationState.Running
     val hasCompleteImageSizeMapping = WorkflowConfigValidator.hasCompleteImageSizeMapping(state.config)
-    val needsImageSizeMapping =
-        state.selectedImagePreset != ImageAspectPreset.RATIO_1_1 && !hasCompleteImageSizeMapping
+    val needsImageSizeMapping = !isVideoMode &&
+        state.selectedImagePreset != ImageAspectPreset.RATIO_1_1 &&
+        !hasCompleteImageSizeMapping
     var presetMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
@@ -73,6 +87,29 @@ fun GenerateScreen(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = state.selectedMode == GenerationMode.IMAGE,
+                onClick = { onGenerationModeChanged(GenerationMode.IMAGE) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.GEN_MODE_IMAGE_BUTTON),
+            ) {
+                Text(stringResource(R.string.gen_mode_image))
+            }
+            SegmentedButton(
+                selected = state.selectedMode == GenerationMode.VIDEO,
+                onClick = { onGenerationModeChanged(GenerationMode.VIDEO) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.GEN_MODE_VIDEO_BUTTON),
+            ) {
+                Text(stringResource(R.string.gen_mode_video))
+            }
+        }
+
         OutlinedTextField(
             value = state.prompt,
             onValueChange = onPromptChanged,
@@ -81,64 +118,74 @@ fun GenerateScreen(
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
         )
-        OutlinedTextField(
-            value = state.negative,
-            onValueChange = onNegativeChanged,
-            label = { Text(stringResource(R.string.gen_negative_label)) },
-            placeholder = { Text(stringResource(R.string.gen_negative_placeholder)) },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 2,
-        )
-        ExposedDropdownMenuBox(
-            expanded = presetMenuExpanded,
-            onExpandedChange = { presetMenuExpanded = !presetMenuExpanded },
-        ) {
+
+        if (!isVideoMode) {
             OutlinedTextField(
-                value = stringResource(
-                    R.string.gen_ratio_value,
-                    state.selectedImagePreset.label,
-                    state.selectedImagePreset.width,
-                    state.selectedImagePreset.height,
-                ),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.gen_ratio_label)) },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetMenuExpanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.RATIO_SELECTOR),
+                value = state.negative,
+                onValueChange = onNegativeChanged,
+                label = { Text(stringResource(R.string.gen_negative_label)) },
+                placeholder = { Text(stringResource(R.string.gen_negative_placeholder)) },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
             )
-            ExposedDropdownMenu(
+            ExposedDropdownMenuBox(
                 expanded = presetMenuExpanded,
-                onDismissRequest = { presetMenuExpanded = false },
+                onExpandedChange = { presetMenuExpanded = !presetMenuExpanded },
             ) {
-                ImageAspectPreset.entries.forEach { preset ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    R.string.gen_ratio_value,
-                                    preset.label,
-                                    preset.width,
-                                    preset.height,
+                OutlinedTextField(
+                    value = stringResource(
+                        R.string.gen_ratio_value,
+                        state.selectedImagePreset.label,
+                        state.selectedImagePreset.width,
+                        state.selectedImagePreset.height,
+                    ),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(stringResource(R.string.gen_ratio_label)) },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetMenuExpanded)
+                    },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.RATIO_SELECTOR),
+                )
+                DropdownMenu(
+                    expanded = presetMenuExpanded,
+                    onDismissRequest = { presetMenuExpanded = false },
+                ) {
+                    ImageAspectPreset.entries.forEach { preset ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        R.string.gen_ratio_value,
+                                        preset.label,
+                                        preset.width,
+                                        preset.height,
+                                    )
                                 )
-                            )
-                        },
-                        onClick = {
-                            onImagePresetChanged(preset)
-                            presetMenuExpanded = false
-                        },
-                    )
+                            },
+                            onClick = {
+                                onImagePresetChanged(preset)
+                                presetMenuExpanded = false
+                            },
+                        )
+                    }
                 }
             }
-        }
-        if (needsImageSizeMapping) {
-            Text(stringResource(R.string.gen_ratio_mapping_hint))
+            if (needsImageSizeMapping) {
+                Text(stringResource(R.string.gen_ratio_mapping_hint))
+            }
         }
 
         if (!isGenerateEnabled) {
-            Text(stringResource(R.string.gen_config_hint))
+            Text(
+                stringResource(
+                    if (isVideoMode) R.string.gen_video_config_hint
+                    else R.string.gen_config_hint
+                )
+            )
         }
 
         Button(
@@ -161,21 +208,32 @@ fun GenerateScreen(
         if (generationState is GenerationState.Success) {
             Text(stringResource(R.string.gen_results_title))
             generationState.results.forEachIndexed { index, result ->
-                ResultCard(
-                    result = result,
-                    decodePassword = state.config.decodePassword,
-                    imageLoader = imageLoader,
-                    context = context,
-                    index = index,
-                    onDownloadResult = onDownloadResult,
-                )
+                when (resolveOutputKind(result, fallbackMode = state.selectedMode)) {
+                    OutputMediaKind.IMAGE -> ImageResultCard(
+                        result = result,
+                        decodePassword = state.config.decodePassword,
+                        imageLoader = imageLoader,
+                        context = context,
+                        index = index,
+                        onDownloadResult = onDownloadResult,
+                    )
+
+                    OutputMediaKind.VIDEO -> VideoResultCard(
+                        result = result,
+                        index = index,
+                        onDownloadResult = onDownloadResult,
+                    )
+
+                    OutputMediaKind.UNKNOWN -> Unit
+                }
             }
         }
 
+        val activeWorkflowId = if (isVideoMode) state.config.videoWorkflowId else state.config.workflowId
         Text(
             stringResource(
                 R.string.gen_workflow_id_value,
-                state.config.workflowId.ifBlank { stringResource(R.string.gen_not_set) },
+                activeWorkflowId.ifBlank { stringResource(R.string.gen_not_set) },
             )
         )
         Text(
@@ -189,7 +247,7 @@ fun GenerateScreen(
 }
 
 @Composable
-private fun ResultCard(
+private fun ImageResultCard(
     result: GeneratedOutput,
     decodePassword: String,
     imageLoader: ImageLoader,
@@ -228,6 +286,66 @@ private fun ResultCard(
                 Text(stringResource(R.string.gen_download_button))
             }
         }
+    }
+}
+
+@Composable
+private fun VideoResultCard(
+    result: GeneratedOutput,
+    index: Int,
+    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+) {
+    val videoUri = remember(result.fileUrl) { Uri.parse(result.fileUrl) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            key(result.fileUrl) {
+                AndroidView(
+                    factory = { viewContext ->
+                        VideoView(viewContext).apply {
+                            val mediaController = MediaController(viewContext)
+                            mediaController.setAnchorView(this)
+                            setMediaController(mediaController)
+                            setVideoURI(videoUri)
+                            setOnPreparedListener { mediaPlayer ->
+                                mediaPlayer.isLooping = true
+                                start()
+                            }
+                            setOnErrorListener { _, _, _ -> false }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .testTag(UiTestTags.VIDEO_RESULT_PLAYER),
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                stringResource(
+                    R.string.gen_result_type_value,
+                    result.fileType.ifBlank { stringResource(R.string.gen_unknown) },
+                )
+            )
+            Text(stringResource(R.string.gen_result_url_value, result.fileUrl))
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { onDownloadResult(result, index + 1) },
+            ) {
+                Text(stringResource(R.string.gen_download_button))
+            }
+        }
+    }
+}
+
+private fun resolveOutputKind(
+    output: GeneratedOutput,
+    fallbackMode: GenerationMode,
+): OutputMediaKind {
+    return when (val detected = output.detectMediaKind()) {
+        OutputMediaKind.UNKNOWN ->
+            if (fallbackMode == GenerationMode.VIDEO) OutputMediaKind.VIDEO else OutputMediaKind.IMAGE
+
+        else -> detected
     }
 }
 

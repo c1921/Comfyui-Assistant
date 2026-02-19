@@ -2,6 +2,7 @@ package io.github.c1921.comfyui_assistant.data.repository
 
 import io.github.c1921.comfyui_assistant.data.network.NodeInfoItem
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 
@@ -10,6 +11,16 @@ object WorkflowRequestBuilder {
     private const val HEIGHT_FIELD_NAME = "height"
 
     fun buildNodeInfoList(config: WorkflowConfig, input: GenerationInput): List<NodeInfoItem> {
+        return when (input.mode) {
+            GenerationMode.IMAGE -> buildImageNodeInfoList(config, input)
+            GenerationMode.VIDEO -> buildVideoNodeInfoList(config, input)
+        }
+    }
+
+    private fun buildImageNodeInfoList(
+        config: WorkflowConfig,
+        input: GenerationInput,
+    ): List<NodeInfoItem> {
         val result = mutableListOf(
             NodeInfoItem(
                 nodeId = config.promptNodeId.trim(),
@@ -42,5 +53,18 @@ object WorkflowRequestBuilder {
             )
         }
         return result
+    }
+
+    private fun buildVideoNodeInfoList(
+        config: WorkflowConfig,
+        input: GenerationInput,
+    ): List<NodeInfoItem> {
+        return listOf(
+            NodeInfoItem(
+                nodeId = config.videoPromptNodeId.trim(),
+                fieldName = config.videoPromptFieldName.trim(),
+                fieldValue = input.prompt.trim(),
+            )
+        )
     }
 }

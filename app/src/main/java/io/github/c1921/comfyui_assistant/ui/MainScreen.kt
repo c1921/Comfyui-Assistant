@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import coil.ImageLoader
 import io.github.c1921.comfyui_assistant.R
+import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.feature.generate.GenerateScreen
@@ -43,6 +44,7 @@ fun MainScreen(
     isGenerateEnabled: Boolean,
     onPromptChanged: (String) -> Unit,
     onNegativeChanged: (String) -> Unit,
+    onGenerationModeChanged: (GenerationMode) -> Unit,
     onImagePresetChanged: (ImageAspectPreset) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
@@ -54,6 +56,9 @@ fun MainScreen(
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
     onSizeNodeIdChanged: (String) -> Unit,
+    onVideoWorkflowIdChanged: (String) -> Unit,
+    onVideoPromptNodeIdChanged: (String) -> Unit,
+    onVideoPromptFieldNameChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -97,6 +102,7 @@ fun MainScreen(
                     isGenerateEnabled = isGenerateEnabled,
                     onPromptChanged = onPromptChanged,
                     onNegativeChanged = onNegativeChanged,
+                    onGenerationModeChanged = onGenerationModeChanged,
                     onImagePresetChanged = onImagePresetChanged,
                     onGenerate = onGenerate,
                     onRetry = onRetry,
@@ -113,6 +119,9 @@ fun MainScreen(
                     onNegativeNodeIdChanged = onNegativeNodeIdChanged,
                     onNegativeFieldNameChanged = onNegativeFieldNameChanged,
                     onSizeNodeIdChanged = onSizeNodeIdChanged,
+                    onVideoWorkflowIdChanged = onVideoWorkflowIdChanged,
+                    onVideoPromptNodeIdChanged = onVideoPromptNodeIdChanged,
+                    onVideoPromptFieldNameChanged = onVideoPromptFieldNameChanged,
                     onDecodePasswordChanged = onDecodePasswordChanged,
                     onSaveSettings = onSaveSettings,
                     onClearApiKey = onClearApiKey,

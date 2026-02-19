@@ -30,6 +30,9 @@ fun SettingsScreen(
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
     onSizeNodeIdChanged: (String) -> Unit,
+    onVideoWorkflowIdChanged: (String) -> Unit,
+    onVideoPromptNodeIdChanged: (String) -> Unit,
+    onVideoPromptFieldNameChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -48,6 +51,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation(),
         )
+        Text(stringResource(R.string.settings_image_section_title))
         OutlinedTextField(
             value = state.workflowId,
             onValueChange = onWorkflowIdChanged,
@@ -87,6 +91,29 @@ fun SettingsScreen(
             label = { Text(stringResource(R.string.settings_size_node_id_label)) },
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Text(stringResource(R.string.settings_video_section_title))
+        OutlinedTextField(
+            value = state.videoWorkflowId,
+            onValueChange = onVideoWorkflowIdChanged,
+            label = { Text(stringResource(R.string.settings_video_workflow_id_label)) },
+            placeholder = { Text(stringResource(R.string.settings_workflow_id_placeholder)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.videoPromptNodeId,
+            onValueChange = onVideoPromptNodeIdChanged,
+            label = { Text(stringResource(R.string.settings_video_prompt_node_id_label)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.videoPromptFieldName,
+            onValueChange = onVideoPromptFieldNameChanged,
+            label = { Text(stringResource(R.string.settings_video_prompt_field_name_label)) },
+            placeholder = { Text(stringResource(R.string.settings_field_name_placeholder)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         OutlinedTextField(
             value = state.decodePassword,
             onValueChange = onDecodePasswordChanged,

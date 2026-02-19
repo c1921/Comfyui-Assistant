@@ -10,8 +10,40 @@ object WorkflowConfigValidator {
         return null
     }
 
+    fun validateForSettings(config: WorkflowConfig): String? {
+        validateMappingConsistency(config)?.let { return it }
+
+        val hasVideoWorkflowId = config.videoWorkflowId.isNotBlank()
+        val hasVideoPromptNodeId = config.videoPromptNodeId.isNotBlank()
+        val hasVideoPromptFieldName = config.videoPromptFieldName.isNotBlank()
+        val hasAnyVideoMapping = hasVideoWorkflowId || hasVideoPromptNodeId || hasVideoPromptFieldName
+        val hasCompleteVideoMapping =
+            hasVideoWorkflowId && hasVideoPromptNodeId && hasVideoPromptFieldName
+        if (hasAnyVideoMapping && !hasCompleteVideoMapping) {
+            return "Video mapping requires workflowId, prompt nodeId and prompt fieldName."
+        }
+        return null
+    }
+
     fun validateForGenerate(config: WorkflowConfig, input: GenerationInput): String? {
         validateMappingConsistency(config)?.let { return it }
+        return when (input.mode) {
+            GenerationMode.IMAGE -> validateForImageGenerate(config, input)
+            GenerationMode.VIDEO -> validateForVideoGenerate(config, input)
+        }
+    }
+
+    fun validateForVideoGenerate(config: WorkflowConfig, input: GenerationInput): String? {
+        if (config.apiKey.isBlank()) return "Please configure API key first."
+        if (config.videoWorkflowId.isBlank()) return "Please configure video workflowId first."
+        if (config.videoPromptNodeId.isBlank() || config.videoPromptFieldName.isBlank()) {
+            return "Please configure video prompt node mapping first."
+        }
+        if (input.prompt.isBlank()) return "Prompt cannot be empty."
+        return null
+    }
+
+    private fun validateForImageGenerate(config: WorkflowConfig, input: GenerationInput): String? {
         if (config.apiKey.isBlank()) return "Please configure API key first."
         if (config.workflowId.isBlank()) return "Please configure workflowId first."
         if (config.promptNodeId.isBlank() || config.promptFieldName.isBlank()) {

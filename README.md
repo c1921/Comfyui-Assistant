@@ -110,3 +110,26 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 若你要编译 AndroidTest，网络环境需能访问 Google Maven（`dl.google.com`）。
+
+## 9. Settings update (2026-02-19)
+
+- Settings now includes a **Video settings** section.
+- Image and video configurations share the same `API key`.
+- Newly added optional video fields:
+  - `videoWorkflowId`
+  - `videoPromptNodeId`
+  - `videoPromptFieldName`
+- Save validation rule:
+  - Video mapping must be **all filled or all empty**.
+  - Incomplete video mapping blocks saving config.
+- Existing image generation behavior is unchanged.
+
+## 10. Generate mode update (2026-02-19)
+
+- Generate page now supports switching between **Image** and **Video** modes.
+- Video mode uses ComfyUI workflow API with `videoWorkflowId`, `videoPromptNodeId`, and `videoPromptFieldName`.
+- Video mode only requires positive prompt input.
+- Results can contain both images and videos and are rendered by media type.
+- Download supports both media types:
+  - Images -> `Pictures/RunningHubAssistant`
+  - Videos -> `Movies/RunningHubAssistant`
