@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
                     onBackFromAlbumDetail = albumViewModel::backToList,
                     onRetryLoadAlbumMedia = albumViewModel::retryLoadSelectedMedia,
                     onToggleAlbumMetadataExpanded = albumViewModel::toggleMetadataExpanded,
+                    onSendAlbumImageToVideoInput = generateViewModel::onVideoInputImageSelectedFromAlbum,
                     onApiKeyChanged = settingsViewModel::onApiKeyChanged,
                     onWorkflowIdChanged = settingsViewModel::onWorkflowIdChanged,
                     onPromptNodeIdChanged = settingsViewModel::onPromptNodeIdChanged,

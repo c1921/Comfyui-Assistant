@@ -64,6 +64,7 @@ fun MainScreen(
     onBackFromAlbumDetail: () -> Unit,
     onRetryLoadAlbumMedia: () -> Unit,
     onToggleAlbumMetadataExpanded: () -> Unit,
+    onSendAlbumImageToVideoInput: (Uri, String) -> Unit,
     onApiKeyChanged: (String) -> Unit,
     onWorkflowIdChanged: (String) -> Unit,
     onPromptNodeIdChanged: (String) -> Unit,
@@ -146,6 +147,7 @@ fun MainScreen(
                     onBackToList = onBackFromAlbumDetail,
                     onRetryLoadMedia = onRetryLoadAlbumMedia,
                     onToggleMetadataExpanded = onToggleAlbumMetadataExpanded,
+                    onSendImageToVideoInput = onSendAlbumImageToVideoInput,
                 )
 
                 MainTab.Settings -> SettingsScreen(

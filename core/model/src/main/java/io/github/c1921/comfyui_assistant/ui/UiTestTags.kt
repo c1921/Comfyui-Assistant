@@ -9,6 +9,7 @@ object UiTestTags {
     const val ALBUM_DETAIL_VIDEO = "album_detail_video"
     const val ALBUM_METADATA_PANEL = "album_metadata_panel"
     const val ALBUM_METADATA_TOGGLE = "album_metadata_toggle"
+    const val ALBUM_SEND_TO_VIDEO_INPUT_BUTTON = "album_send_to_video_input_button"
     const val GENERATE_BUTTON = "generate_button"
     const val VIEW_ALBUM_BUTTON = "view_album_button"
     const val RATIO_SELECTOR = "ratio_selector"

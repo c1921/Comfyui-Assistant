@@ -1,5 +1,6 @@
 package io.github.c1921.comfyui_assistant.feature.album
 
+import android.net.Uri
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -23,6 +24,7 @@ import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
 import java.io.File
 
 class AlbumScreenInstrumentedTest {
@@ -45,6 +47,7 @@ class AlbumScreenInstrumentedTest {
                 onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
             )
         }
 
@@ -82,6 +85,7 @@ class AlbumScreenInstrumentedTest {
                 onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = { isMetadataExpanded = !isMetadataExpanded },
+                onSendImageToVideoInput = { _, _ -> },
             )
         }
 
@@ -119,10 +123,91 @@ class AlbumScreenInstrumentedTest {
                 onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
             )
         }
 
         composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_VIDEO).assertIsDisplayed()
+    }
+
+    @Test
+    fun imageDetail_sendToVideoInputButton_isVisible_andInvokesCallback() {
+        val localRelativePath = "tasks/task-send-1/out_1.jpg"
+        val localFile = prepareInternalAlbumFile(localRelativePath)
+        val mediaItem = mediaItem(
+            taskId = "task-send-1",
+            index = 1,
+            kind = OutputMediaKind.IMAGE,
+            localRelativePath = localRelativePath,
+        )
+        val detail = taskDetail(
+            taskId = "task-send-1",
+            mediaItems = listOf(mediaItem),
+        )
+        val state = AlbumUiState(
+            selectedMediaKey = AlbumMediaKey("task-send-1", 1),
+            selectedTaskDetail = detail,
+            selectedMediaItem = mediaItem,
+            isMetadataExpanded = false,
+        )
+        var sentUri: Uri? = null
+        var sentDisplayName: String? = null
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = state,
+                onOpenMedia = {},
+                onBackToList = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { uri, displayName ->
+                    sentUri = uri
+                    sentDisplayName = displayName
+                },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).performClick()
+        composeRule.runOnIdle {
+            assertEquals(Uri.fromFile(localFile), sentUri)
+            assertEquals(localFile.name, sentDisplayName)
+        }
+    }
+
+    @Test
+    fun videoDetail_sendToVideoInputButton_isHidden() {
+        val localRelativePath = "tasks/task-send-video-1/out_1.mp4"
+        prepareInternalAlbumFile(localRelativePath)
+        val mediaItem = mediaItem(
+            taskId = "task-send-video-1",
+            index = 1,
+            kind = OutputMediaKind.VIDEO,
+            localRelativePath = localRelativePath,
+        )
+        val detail = taskDetail(
+            taskId = "task-send-video-1",
+            mediaItems = listOf(mediaItem),
+        )
+        val state = AlbumUiState(
+            selectedMediaKey = AlbumMediaKey("task-send-video-1", 1),
+            selectedTaskDetail = detail,
+            selectedMediaItem = mediaItem,
+            isMetadataExpanded = false,
+        )
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = state,
+                onOpenMedia = {},
+                onBackToList = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onAllNodesWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).assertCountEquals(0)
     }
 
     private fun mediaSummary(

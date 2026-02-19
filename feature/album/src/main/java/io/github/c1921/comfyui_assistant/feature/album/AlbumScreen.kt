@@ -68,6 +68,7 @@ fun AlbumScreen(
     onBackToList: () -> Unit,
     onRetryLoadMedia: () -> Unit,
     onToggleMetadataExpanded: () -> Unit,
+    onSendImageToVideoInput: (Uri, String) -> Unit,
 ) {
     if (state.selectedMediaKey == null) {
         AlbumMediaGridContent(
@@ -81,6 +82,7 @@ fun AlbumScreen(
         onBackToList = onBackToList,
         onRetryLoadMedia = onRetryLoadMedia,
         onToggleMetadataExpanded = onToggleMetadataExpanded,
+        onSendImageToVideoInput = onSendImageToVideoInput,
     )
 }
 
@@ -183,12 +185,15 @@ private fun AlbumMediaDetailContent(
     onBackToList: () -> Unit,
     onRetryLoadMedia: () -> Unit,
     onToggleMetadataExpanded: () -> Unit,
+    onSendImageToVideoInput: (Uri, String) -> Unit,
 ) {
     val context = LocalContext.current
     val selectedMedia = state.selectedMediaItem
-    val selectedKey = state.selectedMediaKey
     val localFile = remember(selectedMedia?.localRelativePath, context.filesDir) {
         selectedMedia?.let { File(context.filesDir, "internal_album/${it.localRelativePath}") }
+    }
+    val sendableImageFile = localFile?.takeIf {
+        selectedMedia?.savedMediaKind == OutputMediaKind.IMAGE && it.exists()
     }
     Column(
         modifier = Modifier
@@ -202,9 +207,16 @@ private fun AlbumMediaDetailContent(
             Button(onClick = onBackToList) {
                 Text(stringResource(R.string.album_back_to_list))
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            selectedKey?.let {
-                Text(stringResource(R.string.album_detail_key_value, it.taskId, it.index))
+            if (sendableImageFile != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        onSendImageToVideoInput(Uri.fromFile(sendableImageFile), sendableImageFile.name)
+                    },
+                    modifier = Modifier.testTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON),
+                ) {
+                    Text(stringResource(R.string.album_send_to_video_input))
+                }
             }
         }
 

@@ -91,23 +91,51 @@ class GenerateViewModel(
             onClearInputImage()
             return
         }
-
-        val normalizedDisplayName = displayName.trim().ifBlank {
-            uri.lastPathSegment?.substringAfterLast('/').orEmpty().ifBlank { uri.toString() }
-        }
-        setModeSelection(
+        applySelectionForMode(
             mode = selectedMode,
+            uri = uri,
+            displayName = displayName,
+            persistFailureMessagePrefix = "Selected image could not be persisted",
+        )
+    }
+
+    fun onVideoInputImageSelectedFromAlbum(
+        uri: Uri,
+        displayName: String,
+    ) {
+        if (_uiState.value.config.videoImageInputNodeId.isBlank()) {
+            emitMessage("Please configure video image input nodeId first.")
+            return
+        }
+        applySelectionForMode(
+            mode = GenerationMode.VIDEO,
+            uri = uri,
+            displayName = displayName,
+            persistFailureMessagePrefix = "Video input image could not be persisted",
+            persistSuccessMessage = "Image sent to video input.",
+        )
+    }
+
+    private fun applySelectionForMode(
+        mode: GenerationMode,
+        uri: Uri,
+        displayName: String,
+        persistFailureMessagePrefix: String,
+        persistSuccessMessage: String? = null,
+    ) {
+        val normalizedDisplayName = normalizeInputImageDisplayName(uri, displayName)
+        setModeSelection(
+            mode = mode,
             selection = PersistedInputImageSelection(
                 uri = uri,
                 displayName = normalizedDisplayName,
             ),
         )
         refreshVisibleInputImage()
-
         viewModelScope.launch {
             val persistResult = try {
                 inputImageSelectionStore.persistSelection(
-                    mode = selectedMode,
+                    mode = mode,
                     sourceUri = uri,
                     displayName = normalizedDisplayName,
                 )
@@ -115,12 +143,22 @@ class GenerateViewModel(
                 Result.failure(error)
             }
             persistResult.onSuccess { persistedSelection ->
-                setModeSelection(selectedMode, persistedSelection)
+                setModeSelection(mode, persistedSelection)
                 refreshVisibleInputImage()
+                persistSuccessMessage?.let { emitMessage(it) }
             }.onFailure { error ->
                 val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
-                emitMessage("Selected image could not be persisted: $reason")
+                emitMessage("$persistFailureMessagePrefix: $reason")
             }
+        }
+    }
+
+    private fun normalizeInputImageDisplayName(
+        uri: Uri,
+        displayName: String,
+    ): String {
+        return displayName.trim().ifBlank {
+            uri.lastPathSegment?.substringAfterLast('/').orEmpty().ifBlank { uri.toString() }
         }
     }
 

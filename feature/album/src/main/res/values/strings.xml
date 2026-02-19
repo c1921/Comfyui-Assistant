@@ -4,7 +4,6 @@
     <string name="album_video_badge">VIDEO</string>
     <string name="album_back_to_list">Back to list</string>
     <string name="album_retry_load">Retry</string>
-    <string name="album_detail_key_value">%1$s #%2$d</string>
     <string name="album_detail_error">Failed to load task: %1$s</string>
     <string name="album_media_missing">Local file is missing.</string>
     <string name="album_metadata_show">Metadata</string>
@@ -30,4 +29,5 @@
     <string name="album_media_source_url_value">sourceUrl: %1$s</string>
     <string name="album_media_source_type_value">sourceType: %1$s</string>
     <string name="album_media_source_node_value">sourceNodeId: %1$s</string>
+    <string name="album_send_to_video_input">Send to video input</string>
 </resources>

@@ -515,6 +515,141 @@ class GenerateViewModelTest {
     }
 
     @Test
+    fun `onVideoInputImageSelectedFromAlbum writes video selection without changing selected mode`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val selectionStore = FakeInputImageSelectionStore()
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfigWithVideoMapping().copy(
+                    videoImageInputNodeId = "13",
+                )
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = selectionStore,
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+        )
+
+        advanceUntilIdle()
+        val uri = Uri.parse("file:///internal_album/tasks/task-a/out_1.jpg")
+        viewModel.onVideoInputImageSelectedFromAlbum(uri, "out_1.jpg")
+        advanceUntilIdle()
+
+        assertEquals(GenerationMode.IMAGE, viewModel.uiState.value.selectedMode)
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(uri, viewModel.uiState.value.selectedInputImageUri)
+        assertEquals("out_1.jpg", viewModel.uiState.value.selectedInputImageDisplayName)
+        assertTrue(selectionStore.persistedModes.contains(GenerationMode.VIDEO))
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `onVideoInputImageSelectedFromAlbum overwrites previous video selection`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfigWithVideoMapping().copy(
+                    videoImageInputNodeId = "13",
+                )
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+        )
+
+        advanceUntilIdle()
+        val firstUri = Uri.parse("file:///internal_album/tasks/task-a/out_1.jpg")
+        val secondUri = Uri.parse("file:///internal_album/tasks/task-a/out_2.jpg")
+        viewModel.onVideoInputImageSelectedFromAlbum(firstUri, "out_1.jpg")
+        viewModel.onVideoInputImageSelectedFromAlbum(secondUri, "out_2.jpg")
+        advanceUntilIdle()
+
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(secondUri, viewModel.uiState.value.selectedInputImageUri)
+        assertEquals("out_2.jpg", viewModel.uiState.value.selectedInputImageDisplayName)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `onVideoInputImageSelectedFromAlbum rejects when video image input nodeId is missing`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val messages = mutableListOf<String>()
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfigWithVideoMapping()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+        )
+        val collectJob = launch { viewModel.messages.collect { messages.add(it) } }
+
+        advanceUntilIdle()
+        val uri = Uri.parse("file:///internal_album/tasks/task-a/out_1.jpg")
+        viewModel.onVideoInputImageSelectedFromAlbum(uri, "out_1.jpg")
+        advanceUntilIdle()
+
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.selectedInputImageUri)
+        assertTrue(messages.any { it.contains("Please configure video image input nodeId first.") })
+        collectJob.cancel()
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `onVideoInputImageSelectedFromAlbum keeps session selection when persistence fails`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val messages = mutableListOf<String>()
+        val selectionStore = FakeInputImageSelectionStore(
+            persistResultProvider = { mode, sourceUri, displayName ->
+                if (mode == GenerationMode.VIDEO) {
+                    Result.failure(IllegalStateException("disk full"))
+                } else {
+                    Result.success(
+                        PersistedInputImageSelection(
+                            uri = sourceUri,
+                            displayName = displayName,
+                        )
+                    )
+                }
+            }
+        )
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfigWithVideoMapping().copy(videoImageInputNodeId = "13")
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = selectionStore,
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+        )
+        val collectJob = launch { viewModel.messages.collect { messages.add(it) } }
+
+        advanceUntilIdle()
+        val uri = Uri.parse("file:///internal_album/tasks/task-a/out_3.jpg")
+        viewModel.onVideoInputImageSelectedFromAlbum(uri, "out_3.jpg")
+        advanceUntilIdle()
+
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(uri, viewModel.uiState.value.selectedInputImageUri)
+        assertTrue(messages.any { it.contains("Video input image could not be persisted") })
+        collectJob.cancel()
+        Dispatchers.resetMain()
+    }
+
+    @Test
     fun `selection remains available when persistence fails and emits message`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -704,6 +839,7 @@ class GenerateViewModelTest {
     ) : InputImageSelectionStore {
         private var selections = initialSelections
         val clearedModes = mutableListOf<GenerationMode>()
+        val persistedModes = mutableListOf<GenerationMode>()
 
         override suspend fun loadSelections(): PersistedInputImageSelections = selections
 
@@ -712,6 +848,7 @@ class GenerateViewModelTest {
             sourceUri: Uri,
             displayName: String,
         ): Result<PersistedInputImageSelection> {
+            persistedModes += mode
             val result = persistResultProvider(mode, sourceUri, displayName)
             result.onSuccess { persistedSelection ->
                 selections = when (mode) {
