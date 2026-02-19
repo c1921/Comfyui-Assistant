@@ -35,6 +35,7 @@ fun SettingsScreen(
     onVideoPromptNodeIdChanged: (String) -> Unit,
     onVideoPromptFieldNameChanged: (String) -> Unit,
     onVideoImageInputNodeIdChanged: (String) -> Unit,
+    onVideoLengthNodeIdChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -125,6 +126,12 @@ fun SettingsScreen(
             value = state.videoImageInputNodeId,
             onValueChange = onVideoImageInputNodeIdChanged,
             label = { Text(stringResource(R.string.settings_video_image_input_node_id_label)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.videoLengthNodeId,
+            onValueChange = onVideoLengthNodeIdChanged,
+            label = { Text(stringResource(R.string.settings_video_length_node_id_label)) },
             modifier = Modifier.fillMaxWidth(),
         )
 

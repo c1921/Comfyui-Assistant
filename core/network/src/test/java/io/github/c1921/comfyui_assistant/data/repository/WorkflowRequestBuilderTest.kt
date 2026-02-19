@@ -122,6 +122,47 @@ class WorkflowRequestBuilderTest {
     }
 
     @Test
+    fun `buildNodeInfoList includes video length with fixed value fieldName when configured`() {
+        val config = WorkflowConfig(
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+            videoLengthNodeId = "31",
+        )
+        val input = GenerationInput(
+            prompt = "a panda dancing",
+            negative = "",
+            mode = GenerationMode.VIDEO,
+            videoLengthFrames = 80,
+        )
+
+        val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
+
+        assertEquals(2, result.size)
+        assertEquals("31", result[1].nodeId)
+        assertEquals("value", result[1].fieldName)
+        assertEquals(80, result[1].fieldValue)
+    }
+
+    @Test
+    fun `buildNodeInfoList skips video length when video length nodeId is missing`() {
+        val config = WorkflowConfig(
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+        )
+        val input = GenerationInput(
+            prompt = "a panda dancing",
+            negative = "",
+            mode = GenerationMode.VIDEO,
+            videoLengthFrames = 80,
+        )
+
+        val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
+
+        assertEquals(1, result.size)
+        assertEquals("12", result[0].nodeId)
+    }
+
+    @Test
     fun `buildNodeInfoList includes uploaded image in image mode with fixed image fieldName`() {
         val config = WorkflowConfig(
             promptNodeId = "6",

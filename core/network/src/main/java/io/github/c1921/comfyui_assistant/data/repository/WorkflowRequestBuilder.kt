@@ -10,6 +10,7 @@ object WorkflowRequestBuilder {
     private const val WIDTH_FIELD_NAME = "width"
     private const val HEIGHT_FIELD_NAME = "height"
     private const val IMAGE_INPUT_FIELD_NAME = "image"
+    private const val VIDEO_LENGTH_FIELD_NAME = "value"
 
     fun buildNodeInfoList(config: WorkflowConfig, input: GenerationInput): List<NodeInfoItem> {
         return when (input.mode) {
@@ -79,6 +80,14 @@ object WorkflowRequestBuilder {
                 nodeId = config.videoImageInputNodeId.trim(),
                 fieldName = IMAGE_INPUT_FIELD_NAME,
                 fieldValue = input.uploadedImageFileName.trim(),
+            )
+        }
+        val videoLengthFrames = input.videoLengthFrames
+        if (config.videoLengthNodeId.isNotBlank() && videoLengthFrames != null) {
+            result += NodeInfoItem(
+                nodeId = config.videoLengthNodeId.trim(),
+                fieldName = VIDEO_LENGTH_FIELD_NAME,
+                fieldValue = videoLengthFrames,
             )
         }
         return result

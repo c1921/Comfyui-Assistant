@@ -61,6 +61,10 @@ class GenerateViewModel(
         _uiState.update { it.copy(selectedImagePreset = value) }
     }
 
+    fun onVideoLengthFramesChanged(value: String) {
+        _uiState.update { it.copy(videoLengthFramesText = value) }
+    }
+
     fun onGenerationModeChanged(value: GenerationMode) {
         _uiState.update { state ->
             if (
@@ -108,6 +112,7 @@ class GenerateViewModel(
                 mode = state.selectedMode,
                 imagePreset = state.selectedImagePreset,
                 hasInputImage = state.selectedInputImageUri != null,
+                videoLengthFrames = resolveVideoLengthFrames(state),
             ),
         ) == null
     }
@@ -126,6 +131,7 @@ class GenerateViewModel(
                 mode = latestState.selectedMode,
                 imagePreset = latestState.selectedImagePreset,
                 hasInputImage = latestState.selectedInputImageUri != null,
+                videoLengthFrames = resolveVideoLengthFrames(latestState),
             )
             val validationError = WorkflowConfigValidator.validateForGenerate(
                 config = latestState.config,
@@ -263,6 +269,12 @@ class GenerateViewModel(
                 )
             )
         }
+    }
+
+    private fun resolveVideoLengthFrames(state: GenerateUiState): Int? {
+        if (state.selectedMode != GenerationMode.VIDEO) return null
+        if (state.config.videoLengthNodeId.isBlank()) return null
+        return state.videoLengthFramesText.trim().toIntOrNull()?.takeIf { it > 0 }
     }
 
     private fun emitMessage(message: String) {

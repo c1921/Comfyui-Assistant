@@ -127,6 +127,50 @@ class WorkflowConfigValidatorTest {
     }
 
     @Test
+    fun `validateForGenerate fails when video length nodeId is configured but length is invalid`() {
+        val config = validConfig().copy(
+            videoWorkflowId = "video-workflow",
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+            videoLengthNodeId = "31",
+        )
+
+        val error = WorkflowConfigValidator.validateForGenerate(
+            config = config,
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.VIDEO,
+                videoLengthFrames = null,
+            ),
+        )
+
+        assertEquals("Please enter a valid video length (> 0).", error)
+    }
+
+    @Test
+    fun `validateForGenerate allows video mode when length mapping and value are both valid`() {
+        val config = validConfig().copy(
+            videoWorkflowId = "video-workflow",
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+            videoLengthNodeId = "31",
+        )
+
+        val error = WorkflowConfigValidator.validateForGenerate(
+            config = config,
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.VIDEO,
+                videoLengthFrames = 80,
+            ),
+        )
+
+        assertNull(error)
+    }
+
+    @Test
     fun `validateForGenerate fails when image input is selected but image input nodeId is missing`() {
         val config = validConfig()
 

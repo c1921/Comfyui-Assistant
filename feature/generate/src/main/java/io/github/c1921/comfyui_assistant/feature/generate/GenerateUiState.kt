@@ -13,6 +13,7 @@ data class GenerateUiState(
     val negative: String = "",
     val selectedMode: GenerationMode = GenerationMode.IMAGE,
     val selectedImagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
+    val videoLengthFramesText: String = "80",
     val selectedInputImageUri: Uri? = null,
     val selectedInputImageDisplayName: String = "",
     val isUploadingInputImage: Boolean = false,

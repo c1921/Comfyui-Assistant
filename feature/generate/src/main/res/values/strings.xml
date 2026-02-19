@@ -5,6 +5,8 @@
     <string name="gen_prompt_placeholder">Enter positive prompt</string>
     <string name="gen_negative_label">Negative (optional)</string>
     <string name="gen_negative_placeholder">Enter negative prompt</string>
+    <string name="gen_video_length_frames_label">Video frames</string>
+    <string name="gen_video_length_frames_placeholder">Example: 80</string>
     <string name="gen_input_image_title">Input image (optional)</string>
     <string name="gen_input_image_pick_button">Select image</string>
     <string name="gen_input_image_clear_button">Clear selected image</string>

@@ -47,6 +47,7 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
                 onInputImageSelected = { _, _ -> },
                 onClearInputImage = {},
                 onGenerate = {},
@@ -77,6 +78,7 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
                 onInputImageSelected = { _, _ -> },
                 onClearInputImage = {},
                 onGenerate = {},
@@ -127,6 +129,7 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
                 onInputImageSelected = { _, _ -> },
                 onClearInputImage = {},
                 onGenerate = {},
@@ -169,6 +172,7 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
                 onInputImageSelected = { _, _ -> },
                 onClearInputImage = {},
                 onGenerate = {},
@@ -200,6 +204,7 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
                 onInputImageSelected = { _, _ -> },
                 onClearInputImage = {},
                 onGenerate = {},
@@ -232,6 +237,7 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
                 onInputImageSelected = { _, _ -> },
                 onClearInputImage = {},
                 onGenerate = {},
@@ -243,6 +249,68 @@ class GenerateScreenInstrumentedTest {
         }
 
         composeRule.onNodeWithTag(UiTestTags.INPUT_IMAGE_SELECTED_LABEL).assertIsDisplayed()
+    }
+
+    @Test
+    fun videoLengthInput_isVisible_whenVideoLengthNodeIdIsConfigured() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val imageLoader = ImageLoader.Builder(context).build()
+        val state = GenerateUiState(
+            selectedMode = GenerationMode.VIDEO,
+            config = WorkflowConfig(videoLengthNodeId = "31"),
+        )
+
+        composeRule.setContent {
+            GenerateScreen(
+                state = state,
+                isGenerateEnabled = true,
+                onPromptChanged = {},
+                onNegativeChanged = {},
+                onGenerationModeChanged = {},
+                onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
+                onGenerate = {},
+                onRetry = {},
+                imageLoader = imageLoader,
+                previewMediaResolver = passthroughResolver(),
+                onDownloadResult = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.VIDEO_LENGTH_FRAMES_INPUT).assertIsDisplayed()
+    }
+
+    @Test
+    fun videoLengthInput_isHidden_whenVideoLengthNodeIdIsMissing() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val imageLoader = ImageLoader.Builder(context).build()
+        val state = GenerateUiState(
+            selectedMode = GenerationMode.VIDEO,
+            config = WorkflowConfig(videoLengthNodeId = ""),
+        )
+
+        composeRule.setContent {
+            GenerateScreen(
+                state = state,
+                isGenerateEnabled = true,
+                onPromptChanged = {},
+                onNegativeChanged = {},
+                onGenerationModeChanged = {},
+                onImagePresetChanged = {},
+                onVideoLengthFramesChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
+                onGenerate = {},
+                onRetry = {},
+                imageLoader = imageLoader,
+                previewMediaResolver = passthroughResolver(),
+                onDownloadResult = { _, _ -> },
+            )
+        }
+
+        composeRule.onAllNodesWithTag(UiTestTags.VIDEO_LENGTH_FRAMES_INPUT).assertCountEquals(0)
     }
 
     private fun passthroughResolver(): PreviewMediaResolver {

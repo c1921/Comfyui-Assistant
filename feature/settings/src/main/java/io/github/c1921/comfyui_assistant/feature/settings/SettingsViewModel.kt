@@ -79,6 +79,10 @@ class SettingsViewModel(
         configDraftStore.update { it.copy(videoImageInputNodeId = value) }
     }
 
+    fun onVideoLengthNodeIdChanged(value: String) {
+        configDraftStore.update { it.copy(videoLengthNodeId = value) }
+    }
+
     fun onDecodePasswordChanged(value: String) {
         configDraftStore.update { it.copy(decodePassword = value) }
     }
@@ -130,6 +134,7 @@ class SettingsViewModel(
                         videoPromptNodeId = config.videoPromptNodeId,
                         videoPromptFieldName = config.videoPromptFieldName,
                         videoImageInputNodeId = config.videoImageInputNodeId,
+                        videoLengthNodeId = config.videoLengthNodeId,
                         decodePassword = config.decodePassword,
                     )
                 }

@@ -15,6 +15,7 @@ data class WorkflowConfig(
     val videoPromptNodeId: String = "",
     val videoPromptFieldName: String = "",
     val videoImageInputNodeId: String = "",
+    val videoLengthNodeId: String = "",
     val decodePassword: String = "",
 )
 
@@ -30,6 +31,7 @@ data class GenerationInput(
     val imagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
     val hasInputImage: Boolean = false,
     val uploadedImageFileName: String = "",
+    val videoLengthFrames: Int? = null,
 )
 
 enum class ImageAspectPreset(

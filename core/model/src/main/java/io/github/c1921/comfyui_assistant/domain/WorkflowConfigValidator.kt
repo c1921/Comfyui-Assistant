@@ -42,6 +42,12 @@ object WorkflowConfigValidator {
         if (input.hasInputImage && config.videoImageInputNodeId.isBlank()) {
             return "Please configure video image input nodeId first."
         }
+        if (config.videoLengthNodeId.isNotBlank()) {
+            val frames = input.videoLengthFrames
+            if (frames == null || frames <= 0) {
+                return "Please enter a valid video length (> 0)."
+            }
+        }
         if (input.prompt.isBlank()) return "Prompt cannot be empty."
         return null
     }

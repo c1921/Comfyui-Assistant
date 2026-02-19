@@ -49,6 +49,7 @@ class SecureConfigStore(
             videoPromptNodeId = prefs.getString(KEY_VIDEO_PROMPT_NODE_ID, "").orEmpty(),
             videoPromptFieldName = prefs.getString(KEY_VIDEO_PROMPT_FIELD_NAME, "").orEmpty(),
             videoImageInputNodeId = prefs.getString(KEY_VIDEO_IMAGE_INPUT_NODE_ID, "").orEmpty(),
+            videoLengthNodeId = prefs.getString(KEY_VIDEO_LENGTH_NODE_ID, "").orEmpty(),
             decodePassword = prefs.getString(KEY_DECODE_PASSWORD, "").orEmpty(),
         )
     }
@@ -67,6 +68,7 @@ class SecureConfigStore(
             putString(KEY_VIDEO_PROMPT_NODE_ID, config.videoPromptNodeId.trim())
             putString(KEY_VIDEO_PROMPT_FIELD_NAME, config.videoPromptFieldName.trim())
             putString(KEY_VIDEO_IMAGE_INPUT_NODE_ID, config.videoImageInputNodeId.trim())
+            putString(KEY_VIDEO_LENGTH_NODE_ID, config.videoLengthNodeId.trim())
             putString(KEY_DECODE_PASSWORD, config.decodePassword)
         }
     }
@@ -89,6 +91,7 @@ class SecureConfigStore(
         const val KEY_VIDEO_PROMPT_NODE_ID = "video_prompt_node_id"
         const val KEY_VIDEO_PROMPT_FIELD_NAME = "video_prompt_field_name"
         const val KEY_VIDEO_IMAGE_INPUT_NODE_ID = "video_image_input_node_id"
+        const val KEY_VIDEO_LENGTH_NODE_ID = "video_length_node_id"
         const val KEY_SIZE_WIDTH_NODE_ID_LEGACY = "size_width_node_id"
         const val KEY_SIZE_HEIGHT_NODE_ID_LEGACY = "size_height_node_id"
         const val KEY_DECODE_PASSWORD = "decode_password"

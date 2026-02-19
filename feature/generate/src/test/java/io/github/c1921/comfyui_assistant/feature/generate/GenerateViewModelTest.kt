@@ -103,6 +103,56 @@ class GenerateViewModelTest {
     }
 
     @Test
+    fun `generate submits video length frames when length nodeId is configured`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfigWithVideoMapping().copy(videoLengthNodeId = "31")
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("video prompt")
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        viewModel.onVideoLengthFramesChanged("96")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(96, generationRepository.lastInput?.videoLengthFrames)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `generate submits null video length when length nodeId is not configured`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfigWithVideoMapping()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("video prompt")
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        viewModel.onVideoLengthFramesChanged("96")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(null, generationRepository.lastInput?.videoLengthFrames)
+        Dispatchers.resetMain()
+    }
+
+    @Test
     fun `isGenerateEnabled is false for non 1 to 1 when size mapping missing`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -161,6 +211,30 @@ class GenerateViewModelTest {
         advanceUntilIdle()
         viewModel.onPromptChanged("hello")
         viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.isGenerateEnabled(viewModel.uiState.value))
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `isGenerateEnabled is false when video length nodeId is configured but value is invalid`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfigWithVideoMapping().copy(videoLengthNodeId = "31")
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("video prompt")
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        viewModel.onVideoLengthFramesChanged("0")
         advanceUntilIdle()
 
         assertFalse(viewModel.isGenerateEnabled(viewModel.uiState.value))

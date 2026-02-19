@@ -82,6 +82,27 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `saveSettings persists video length nodeId`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onVideoLengthNodeIdChanged("31")
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertEquals("31", repository.currentConfig.videoLengthNodeId)
+        Dispatchers.resetMain()
+    }
+
+    @Test
     fun `saveSettings does not persist when video mapping is incomplete`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)

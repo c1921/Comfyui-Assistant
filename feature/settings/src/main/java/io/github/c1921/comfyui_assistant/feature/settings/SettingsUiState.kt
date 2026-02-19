@@ -16,6 +16,7 @@ data class SettingsUiState(
     val videoPromptNodeId: String = "",
     val videoPromptFieldName: String = "",
     val videoImageInputNodeId: String = "",
+    val videoLengthNodeId: String = "",
     val decodePassword: String = "",
 ) {
     fun toWorkflowConfig(): WorkflowConfig {
@@ -32,6 +33,7 @@ data class SettingsUiState(
             videoPromptNodeId = videoPromptNodeId,
             videoPromptFieldName = videoPromptFieldName,
             videoImageInputNodeId = videoImageInputNodeId,
+            videoLengthNodeId = videoLengthNodeId,
             decodePassword = decodePassword,
         )
     }

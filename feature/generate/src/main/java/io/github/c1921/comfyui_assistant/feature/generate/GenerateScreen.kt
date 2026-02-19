@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.ImageLoader
@@ -65,6 +67,7 @@ fun GenerateScreen(
     onNegativeChanged: (String) -> Unit,
     onGenerationModeChanged: (GenerationMode) -> Unit,
     onImagePresetChanged: (ImageAspectPreset) -> Unit,
+    onVideoLengthFramesChanged: (String) -> Unit,
     onInputImageSelected: (Uri?, String) -> Unit,
     onClearInputImage: () -> Unit,
     onGenerate: () -> Unit,
@@ -83,6 +86,7 @@ fun GenerateScreen(
         state.isUploadingInputImage
     val inputImageNodeId = if (isVideoMode) state.config.videoImageInputNodeId else state.config.imageInputNodeId
     val canUseInputImage = inputImageNodeId.isNotBlank()
+    val showVideoLengthFramesInput = isVideoMode && state.config.videoLengthNodeId.isNotBlank()
     val hasCompleteImageSizeMapping = WorkflowConfigValidator.hasCompleteImageSizeMapping(state.config)
     val needsImageSizeMapping = !isVideoMode &&
         state.selectedImagePreset != ImageAspectPreset.RATIO_1_1 &&
@@ -247,6 +251,18 @@ fun GenerateScreen(
             if (needsImageSizeMapping) {
                 Text(stringResource(R.string.gen_ratio_mapping_hint))
             }
+        }
+        if (showVideoLengthFramesInput) {
+            OutlinedTextField(
+                value = state.videoLengthFramesText,
+                onValueChange = onVideoLengthFramesChanged,
+                label = { Text(stringResource(R.string.gen_video_length_frames_label)) },
+                placeholder = { Text(stringResource(R.string.gen_video_length_frames_placeholder)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.VIDEO_LENGTH_FRAMES_INPUT),
+            )
         }
 
         if (!isGenerateEnabled) {
