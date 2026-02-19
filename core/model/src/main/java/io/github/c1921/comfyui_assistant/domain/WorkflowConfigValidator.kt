@@ -39,6 +39,9 @@ object WorkflowConfigValidator {
         if (config.videoPromptNodeId.isBlank() || config.videoPromptFieldName.isBlank()) {
             return "Please configure video prompt node mapping first."
         }
+        if (input.hasInputImage && config.videoImageInputNodeId.isBlank()) {
+            return "Please configure video image input nodeId first."
+        }
         if (input.prompt.isBlank()) return "Prompt cannot be empty."
         return null
     }
@@ -48,6 +51,9 @@ object WorkflowConfigValidator {
         if (config.workflowId.isBlank()) return "Please configure workflowId first."
         if (config.promptNodeId.isBlank() || config.promptFieldName.isBlank()) {
             return "Please configure prompt node mapping first."
+        }
+        if (input.hasInputImage && config.imageInputNodeId.isBlank()) {
+            return "Please configure image input nodeId first."
         }
         if (input.prompt.isBlank()) return "Prompt cannot be empty."
 
@@ -77,5 +83,15 @@ object WorkflowConfigValidator {
 
     fun hasCompleteImageSizeMapping(config: WorkflowConfig): Boolean {
         return config.sizeNodeId.isNotBlank()
+    }
+
+    fun hasInputImageMapping(
+        config: WorkflowConfig,
+        mode: GenerationMode,
+    ): Boolean {
+        return when (mode) {
+            GenerationMode.IMAGE -> config.imageInputNodeId.isNotBlank()
+            GenerationMode.VIDEO -> config.videoImageInputNodeId.isNotBlank()
+        }
     }
 }

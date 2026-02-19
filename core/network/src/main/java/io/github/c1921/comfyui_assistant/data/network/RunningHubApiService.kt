@@ -2,9 +2,12 @@ package io.github.c1921.comfyui_assistant.data.network
 
 import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 
 data class NodeInfoItem(
     val nodeId: String,
@@ -72,6 +75,21 @@ data class OutputsResponse(
     val data: JsonElement?,
 )
 
+data class UploadMediaData(
+    val type: String?,
+    @SerializedName("download_url")
+    val downloadUrl: String?,
+    val size: String?,
+    val fileName: String?,
+)
+
+data class UploadMediaResponse(
+    val code: Int,
+    @SerializedName(value = "message", alternate = ["msg"])
+    val message: String?,
+    val data: UploadMediaData?,
+)
+
 interface RunningHubApiService {
     @POST("/task/openapi/create")
     suspend fun createWorkflowTask(
@@ -84,4 +102,11 @@ interface RunningHubApiService {
         @Header("Authorization") authorization: String,
         @Body request: QueryOutputsRequest,
     ): OutputsResponse
+
+    @Multipart
+    @POST("/openapi/v2/media/upload/binary")
+    suspend fun uploadMediaBinary(
+        @Header("Authorization") authorization: String,
+        @Part file: MultipartBody.Part,
+    ): UploadMediaResponse
 }

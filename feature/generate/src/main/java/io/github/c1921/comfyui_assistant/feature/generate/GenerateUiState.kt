@@ -1,5 +1,6 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
+import android.net.Uri
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
@@ -12,5 +13,8 @@ data class GenerateUiState(
     val negative: String = "",
     val selectedMode: GenerationMode = GenerationMode.IMAGE,
     val selectedImagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
+    val selectedInputImageUri: Uri? = null,
+    val selectedInputImageDisplayName: String = "",
+    val isUploadingInputImage: Boolean = false,
     val generationState: GenerationState = GenerationState.Idle,
 )

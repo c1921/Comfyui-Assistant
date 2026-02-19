@@ -1,11 +1,13 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.github.c1921.comfyui_assistant.data.decoder.fallbackOrNull
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
+import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
 import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
 import io.github.c1921.comfyui_assistant.domain.ConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
@@ -29,6 +31,7 @@ class GenerateViewModel(
     private val configRepository: ConfigRepository,
     private val configDraftStore: ConfigDraftStore,
     private val generationRepository: GenerationRepository,
+    private val inputImageUploader: InputImageUploader,
     private val mediaSaver: MediaSaver,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GenerateUiState())
@@ -59,7 +62,41 @@ class GenerateViewModel(
     }
 
     fun onGenerationModeChanged(value: GenerationMode) {
-        _uiState.update { it.copy(selectedMode = value) }
+        _uiState.update { state ->
+            if (
+                state.selectedInputImageUri != null &&
+                !WorkflowConfigValidator.hasInputImageMapping(state.config, value)
+            ) {
+                state.copy(
+                    selectedMode = value,
+                    selectedInputImageUri = null,
+                    selectedInputImageDisplayName = "",
+                )
+            } else {
+                state.copy(selectedMode = value)
+            }
+        }
+    }
+
+    fun onInputImageSelected(
+        uri: Uri?,
+        displayName: String,
+    ) {
+        _uiState.update {
+            it.copy(
+                selectedInputImageUri = uri,
+                selectedInputImageDisplayName = displayName,
+            )
+        }
+    }
+
+    fun onClearInputImage() {
+        _uiState.update {
+            it.copy(
+                selectedInputImageUri = null,
+                selectedInputImageDisplayName = "",
+            )
+        }
     }
 
     fun isGenerateEnabled(state: GenerateUiState): Boolean {
@@ -70,24 +107,62 @@ class GenerateViewModel(
                 negative = state.negative,
                 mode = state.selectedMode,
                 imagePreset = state.selectedImagePreset,
+                hasInputImage = state.selectedInputImageUri != null,
             ),
         ) == null
     }
 
     fun generate() {
-        if (generationJob?.isActive == true) {
+        val state = _uiState.value
+        if (generationJob?.isActive == true || state.isUploadingInputImage) {
             emitMessage("Task is already running.")
             return
         }
-        val state = _uiState.value
-        val input = GenerationInput(
-            prompt = state.prompt.trim(),
-            negative = state.negative.trim(),
-            mode = state.selectedMode,
-            imagePreset = state.selectedImagePreset,
-        )
-        lastSubmittedInput = input
-        executeGeneration(input)
+        viewModelScope.launch {
+            val latestState = _uiState.value
+            val initialInput = GenerationInput(
+                prompt = latestState.prompt.trim(),
+                negative = latestState.negative.trim(),
+                mode = latestState.selectedMode,
+                imagePreset = latestState.selectedImagePreset,
+                hasInputImage = latestState.selectedInputImageUri != null,
+            )
+            val validationError = WorkflowConfigValidator.validateForGenerate(
+                config = latestState.config,
+                input = initialInput,
+            )
+            if (validationError != null) {
+                updateGenerateFailure(validationError)
+                emitMessage(validationError)
+                return@launch
+            }
+
+            val uploadedImageFileName = if (latestState.selectedInputImageUri != null) {
+                _uiState.update { it.copy(isUploadingInputImage = true) }
+                val uploadResult = try {
+                    inputImageUploader.uploadInputImage(
+                        apiKey = latestState.config.apiKey,
+                        imageUri = latestState.selectedInputImageUri,
+                    )
+                } catch (error: Exception) {
+                    Result.failure(error)
+                } finally {
+                    _uiState.update { it.copy(isUploadingInputImage = false) }
+                }
+                uploadResult.getOrElse { error ->
+                    val message = error.message?.ifBlank { "Upload failed." } ?: "Upload failed."
+                    updateGenerateFailure(message)
+                    emitMessage(message)
+                    return@launch
+                }
+            } else {
+                ""
+            }
+
+            val input = initialInput.copy(uploadedImageFileName = uploadedImageFileName)
+            lastSubmittedInput = input
+            executeGeneration(input)
+        }
     }
 
     fun retry() {
@@ -96,7 +171,7 @@ class GenerateViewModel(
             emitMessage("No previous task to retry.")
             return
         }
-        if (generationJob?.isActive == true) {
+        if (generationJob?.isActive == true || _uiState.value.isUploadingInputImage) {
             emitMessage("Task is already running.")
             return
         }
@@ -146,7 +221,13 @@ class GenerateViewModel(
         viewModelScope.launch {
             configDraftStore.draft.collectLatest { config ->
                 _uiState.update { state ->
-                    state.copy(config = config)
+                    val shouldClearInputImage = state.selectedInputImageUri != null &&
+                        !WorkflowConfigValidator.hasInputImageMapping(config, state.selectedMode)
+                    state.copy(
+                        config = config,
+                        selectedInputImageUri = if (shouldClearInputImage) null else state.selectedInputImageUri,
+                        selectedInputImageDisplayName = if (shouldClearInputImage) "" else state.selectedInputImageDisplayName,
+                    )
                 }
             }
         }
@@ -170,6 +251,20 @@ class GenerateViewModel(
         }
     }
 
+    private fun updateGenerateFailure(message: String) {
+        _uiState.update {
+            it.copy(
+                generationState = GenerationState.Failed(
+                    taskId = null,
+                    errorCode = null,
+                    message = message,
+                    failedReason = null,
+                    promptTipsNodeErrors = null,
+                )
+            )
+        }
+    }
+
     private fun emitMessage(message: String) {
         viewModelScope.launch {
             _messages.emit(message)
@@ -180,6 +275,7 @@ class GenerateViewModel(
         private val configRepository: ConfigRepository,
         private val configDraftStore: ConfigDraftStore,
         private val generationRepository: GenerationRepository,
+        private val inputImageUploader: InputImageUploader,
         private val mediaSaver: MediaSaver,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -188,6 +284,7 @@ class GenerateViewModel(
                 configRepository = configRepository,
                 configDraftStore = configDraftStore,
                 generationRepository = generationRepository,
+                inputImageUploader = inputImageUploader,
                 mediaSaver = mediaSaver,
             ) as T
         }

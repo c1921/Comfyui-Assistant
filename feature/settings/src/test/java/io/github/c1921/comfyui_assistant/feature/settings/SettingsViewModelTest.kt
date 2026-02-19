@@ -59,6 +59,29 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `saveSettings persists image input node mappings`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onImageInputNodeIdChanged("10")
+        viewModel.onVideoImageInputNodeIdChanged("13")
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertEquals("10", repository.currentConfig.imageInputNodeId)
+        assertEquals("13", repository.currentConfig.videoImageInputNodeId)
+        Dispatchers.resetMain()
+    }
+
+    @Test
     fun `saveSettings does not persist when video mapping is incomplete`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)

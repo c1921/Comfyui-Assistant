@@ -122,6 +122,50 @@ class WorkflowRequestBuilderTest {
     }
 
     @Test
+    fun `buildNodeInfoList includes uploaded image in image mode with fixed image fieldName`() {
+        val config = WorkflowConfig(
+            promptNodeId = "6",
+            promptFieldName = "text",
+            imageInputNodeId = "10",
+        )
+        val input = GenerationInput(
+            prompt = "a cat in city",
+            negative = "",
+            mode = GenerationMode.IMAGE,
+            uploadedImageFileName = "openapi/input.png",
+        )
+
+        val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
+
+        assertEquals(2, result.size)
+        assertEquals("10", result[1].nodeId)
+        assertEquals("image", result[1].fieldName)
+        assertEquals("openapi/input.png", result[1].fieldValue)
+    }
+
+    @Test
+    fun `buildNodeInfoList includes uploaded image in video mode with fixed image fieldName`() {
+        val config = WorkflowConfig(
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+            videoImageInputNodeId = "13",
+        )
+        val input = GenerationInput(
+            prompt = "a panda dancing",
+            negative = "",
+            mode = GenerationMode.VIDEO,
+            uploadedImageFileName = "openapi/input.png",
+        )
+
+        val result = WorkflowRequestBuilder.buildNodeInfoList(config, input)
+
+        assertEquals(2, result.size)
+        assertEquals("13", result[1].nodeId)
+        assertEquals("image", result[1].fieldName)
+        assertEquals("openapi/input.png", result[1].fieldValue)
+    }
+
+    @Test
     fun `validateForGenerate returns null when required image fields are present`() {
         val config = WorkflowConfig(
             apiKey = "test-key",

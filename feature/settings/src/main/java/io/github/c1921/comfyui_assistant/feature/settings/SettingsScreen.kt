@@ -30,9 +30,11 @@ fun SettingsScreen(
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
     onSizeNodeIdChanged: (String) -> Unit,
+    onImageInputNodeIdChanged: (String) -> Unit,
     onVideoWorkflowIdChanged: (String) -> Unit,
     onVideoPromptNodeIdChanged: (String) -> Unit,
     onVideoPromptFieldNameChanged: (String) -> Unit,
+    onVideoImageInputNodeIdChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -91,6 +93,12 @@ fun SettingsScreen(
             label = { Text(stringResource(R.string.settings_size_node_id_label)) },
             modifier = Modifier.fillMaxWidth(),
         )
+        OutlinedTextField(
+            value = state.imageInputNodeId,
+            onValueChange = onImageInputNodeIdChanged,
+            label = { Text(stringResource(R.string.settings_image_input_node_id_label)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         Text(stringResource(R.string.settings_video_section_title))
         OutlinedTextField(
@@ -111,6 +119,12 @@ fun SettingsScreen(
             onValueChange = onVideoPromptFieldNameChanged,
             label = { Text(stringResource(R.string.settings_video_prompt_field_name_label)) },
             placeholder = { Text(stringResource(R.string.settings_field_name_placeholder)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.videoImageInputNodeId,
+            onValueChange = onVideoImageInputNodeIdChanged,
+            label = { Text(stringResource(R.string.settings_video_image_input_node_id_label)) },
             modifier = Modifier.fillMaxWidth(),
         )
 

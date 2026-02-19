@@ -5,6 +5,12 @@
     <string name="gen_prompt_placeholder">Enter positive prompt</string>
     <string name="gen_negative_label">Negative (optional)</string>
     <string name="gen_negative_placeholder">Enter negative prompt</string>
+    <string name="gen_input_image_title">Input image (optional)</string>
+    <string name="gen_input_image_pick_button">Select image</string>
+    <string name="gen_input_image_clear_button">Clear selected image</string>
+    <string name="gen_input_image_selected">Selected: %1$s</string>
+    <string name="gen_input_image_preview_desc">Selected input image</string>
+    <string name="gen_input_image_uploading">Uploading image...</string>
     <string name="gen_config_hint">Complete API key, workflowId, prompt nodeId and prompt fieldName first.</string>
     <string name="gen_video_config_hint">Complete API key, video workflowId, video prompt nodeId and video prompt fieldName first.</string>
     <string name="gen_ratio_label">Image ratio</string>

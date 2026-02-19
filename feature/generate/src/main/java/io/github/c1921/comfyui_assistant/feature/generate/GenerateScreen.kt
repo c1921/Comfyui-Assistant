@@ -1,8 +1,12 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.MediaController
 import android.widget.VideoView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +65,8 @@ fun GenerateScreen(
     onNegativeChanged: (String) -> Unit,
     onGenerationModeChanged: (GenerationMode) -> Unit,
     onImagePresetChanged: (ImageAspectPreset) -> Unit,
+    onInputImageSelected: (Uri?, String) -> Unit,
+    onClearInputImage: () -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
     imageLoader: ImageLoader,
@@ -73,12 +79,23 @@ fun GenerateScreen(
     val isProcessing = generationState is GenerationState.ValidatingConfig ||
         generationState is GenerationState.Submitting ||
         generationState is GenerationState.Queued ||
-        generationState is GenerationState.Running
+        generationState is GenerationState.Running ||
+        state.isUploadingInputImage
+    val inputImageNodeId = if (isVideoMode) state.config.videoImageInputNodeId else state.config.imageInputNodeId
+    val canUseInputImage = inputImageNodeId.isNotBlank()
     val hasCompleteImageSizeMapping = WorkflowConfigValidator.hasCompleteImageSizeMapping(state.config)
     val needsImageSizeMapping = !isVideoMode &&
         state.selectedImagePreset != ImageAspectPreset.RATIO_1_1 &&
         !hasCompleteImageSizeMapping
     var presetMenuExpanded by remember { mutableStateOf(false) }
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            val displayName = resolveInputImageDisplayName(context, uri)
+            onInputImageSelected(uri, displayName)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -122,6 +139,55 @@ fun GenerateScreen(
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
         )
+
+        if (canUseInputImage) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(stringResource(R.string.gen_input_image_title))
+                    Button(
+                        onClick = {
+                            pickImageLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        enabled = !isProcessing,
+                        modifier = Modifier.testTag(UiTestTags.INPUT_IMAGE_PICK_BUTTON),
+                    ) {
+                        Text(stringResource(R.string.gen_input_image_pick_button))
+                    }
+                    if (state.selectedInputImageUri != null) {
+                        AsyncImage(
+                            model = state.selectedInputImageUri,
+                            imageLoader = imageLoader,
+                            contentDescription = stringResource(R.string.gen_input_image_preview_desc),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                        )
+                        val displayName = state.selectedInputImageDisplayName.ifBlank {
+                            state.selectedInputImageUri.toString()
+                        }
+                        Text(
+                            text = stringResource(R.string.gen_input_image_selected, displayName),
+                            modifier = Modifier.testTag(UiTestTags.INPUT_IMAGE_SELECTED_LABEL),
+                        )
+                        Button(
+                            onClick = onClearInputImage,
+                            enabled = !isProcessing,
+                            modifier = Modifier.testTag(UiTestTags.INPUT_IMAGE_CLEAR_BUTTON),
+                        ) {
+                            Text(stringResource(R.string.gen_input_image_clear_button))
+                        }
+                    }
+                    if (state.isUploadingInputImage) {
+                        Text(stringResource(R.string.gen_input_image_uploading))
+                    }
+                }
+            }
+        }
 
         if (!isVideoMode) {
             OutlinedTextField(
@@ -401,6 +467,20 @@ private fun resolveOutputKind(
 
         else -> detected
     }
+}
+
+private fun resolveInputImageDisplayName(
+    context: android.content.Context,
+    uri: Uri,
+): String {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val displayName = cursor.getString(0)?.trim().orEmpty()
+                if (displayName.isNotBlank()) return displayName
+            }
+        }
+    return uri.lastPathSegment?.substringAfterLast('/').orEmpty().ifBlank { uri.toString() }
 }
 
 @Composable

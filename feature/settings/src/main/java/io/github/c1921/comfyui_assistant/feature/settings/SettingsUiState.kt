@@ -11,9 +11,11 @@ data class SettingsUiState(
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
     val sizeNodeId: String = "",
+    val imageInputNodeId: String = "",
     val videoWorkflowId: String = "",
     val videoPromptNodeId: String = "",
     val videoPromptFieldName: String = "",
+    val videoImageInputNodeId: String = "",
     val decodePassword: String = "",
 ) {
     fun toWorkflowConfig(): WorkflowConfig {
@@ -25,9 +27,11 @@ data class SettingsUiState(
             negativeNodeId = negativeNodeId,
             negativeFieldName = negativeFieldName,
             sizeNodeId = sizeNodeId,
+            imageInputNodeId = imageInputNodeId,
             videoWorkflowId = videoWorkflowId,
             videoPromptNodeId = videoPromptNodeId,
             videoPromptFieldName = videoPromptFieldName,
+            videoImageInputNodeId = videoImageInputNodeId,
             decodePassword = decodePassword,
         )
     }

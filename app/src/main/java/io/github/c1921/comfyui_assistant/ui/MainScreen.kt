@@ -1,5 +1,6 @@
 package io.github.c1921.comfyui_assistant.ui
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -47,6 +48,8 @@ fun MainScreen(
     onNegativeChanged: (String) -> Unit,
     onGenerationModeChanged: (GenerationMode) -> Unit,
     onImagePresetChanged: (ImageAspectPreset) -> Unit,
+    onInputImageSelected: (Uri?, String) -> Unit,
+    onClearInputImage: () -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
     onDownloadResult: (GeneratedOutput, Int) -> Unit,
@@ -57,9 +60,11 @@ fun MainScreen(
     onNegativeNodeIdChanged: (String) -> Unit,
     onNegativeFieldNameChanged: (String) -> Unit,
     onSizeNodeIdChanged: (String) -> Unit,
+    onImageInputNodeIdChanged: (String) -> Unit,
     onVideoWorkflowIdChanged: (String) -> Unit,
     onVideoPromptNodeIdChanged: (String) -> Unit,
     onVideoPromptFieldNameChanged: (String) -> Unit,
+    onVideoImageInputNodeIdChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
@@ -106,6 +111,8 @@ fun MainScreen(
                     onNegativeChanged = onNegativeChanged,
                     onGenerationModeChanged = onGenerationModeChanged,
                     onImagePresetChanged = onImagePresetChanged,
+                    onInputImageSelected = onInputImageSelected,
+                    onClearInputImage = onClearInputImage,
                     onGenerate = onGenerate,
                     onRetry = onRetry,
                     imageLoader = imageLoader,
@@ -122,9 +129,11 @@ fun MainScreen(
                     onNegativeNodeIdChanged = onNegativeNodeIdChanged,
                     onNegativeFieldNameChanged = onNegativeFieldNameChanged,
                     onSizeNodeIdChanged = onSizeNodeIdChanged,
+                    onImageInputNodeIdChanged = onImageInputNodeIdChanged,
                     onVideoWorkflowIdChanged = onVideoWorkflowIdChanged,
                     onVideoPromptNodeIdChanged = onVideoPromptNodeIdChanged,
                     onVideoPromptFieldNameChanged = onVideoPromptFieldNameChanged,
+                    onVideoImageInputNodeIdChanged = onVideoImageInputNodeIdChanged,
                     onDecodePasswordChanged = onDecodePasswordChanged,
                     onSaveSettings = onSaveSettings,
                     onClearApiKey = onClearApiKey,

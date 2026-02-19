@@ -8,6 +8,7 @@ import io.github.c1921.comfyui_assistant.data.network.CreateTaskResponse
 import io.github.c1921.comfyui_assistant.data.network.OutputsResponse
 import io.github.c1921.comfyui_assistant.data.network.QueryOutputsRequest
 import io.github.c1921.comfyui_assistant.data.network.RunningHubApiService
+import io.github.c1921.comfyui_assistant.data.network.UploadMediaResponse
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
@@ -18,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import okhttp3.MultipartBody
 
 class RunningHubGenerationRepositoryTest {
     @Test
@@ -216,6 +218,13 @@ class RunningHubGenerationRepositoryTest {
             } else {
                 OutputsResponse(code = 813, msg = "APIKEY_TASK_IS_QUEUED", data = null)
             }
+        }
+
+        override suspend fun uploadMediaBinary(
+            authorization: String,
+            file: MultipartBody.Part,
+        ): UploadMediaResponse {
+            throw UnsupportedOperationException("Not required for this test")
         }
     }
 }

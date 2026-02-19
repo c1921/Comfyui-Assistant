@@ -10,12 +10,14 @@
     <string name="settings_negative_node_id_label">Image negative nodeId (optional)</string>
     <string name="settings_negative_field_name_label">Image negative fieldName (optional)</string>
     <string name="settings_size_node_id_label">Image size nodeId (optional)</string>
+    <string name="settings_image_input_node_id_label">Image input nodeId for img2img (optional)</string>
     <string name="settings_video_workflow_id_label">Video workflowId (optional)</string>
     <string name="settings_video_prompt_node_id_label">Video prompt nodeId (optional)</string>
     <string name="settings_video_prompt_field_name_label">Video prompt fieldName (optional)</string>
+    <string name="settings_video_image_input_node_id_label">Video image input nodeId for img2video (optional)</string>
     <string name="settings_decode_password_label">Decode password (optional)</string>
     <string name="settings_decode_password_placeholder">Used for SS_tools encrypted image/video decode</string>
     <string name="settings_save_button">Save config</string>
     <string name="settings_clear_api_key_button">Clear API key</string>
-    <string name="settings_help_text">Image and video share one API key. nodeId and fieldName can be found in exported workflow API JSON. Video mapping requires workflowId, prompt nodeId and prompt fieldName together. Image size mapping uses fixed fieldName: width and height on the same node.</string>
+    <string name="settings_help_text">Image and video share one API key. nodeId and fieldName can be found in exported workflow API JSON. Video mapping requires workflowId, prompt nodeId and prompt fieldName together. Image size mapping uses fixed fieldName: width and height on the same node. Image upload mapping uses fixed fieldName: image.</string>
 </resources>

@@ -1,8 +1,10 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
+import android.net.Uri
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.repository.DownloadToGalleryResult
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
+import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
 import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
@@ -25,8 +27,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class GenerateViewModelTest {
     @Test
     fun `retry without previous task keeps idle state`() = runTest {
@@ -37,6 +42,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfig()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -57,6 +63,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfigWithSizeMapping()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -81,6 +88,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfigWithVideoMapping()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -102,6 +110,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfig()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -123,6 +132,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfig()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -144,6 +154,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfig()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -165,6 +176,7 @@ class GenerateViewModelTest {
             configRepository = FakeConfigRepository(validConfigWithVideoMapping()),
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
+            inputImageUploader = FakeInputImageUploader(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -178,6 +190,85 @@ class GenerateViewModelTest {
         advanceUntilIdle()
 
         assertEquals(GenerationMode.VIDEO, generationRepository.lastInput?.mode)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `generate uploads selected image and passes uploaded fileName`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
+        val uploader = FakeInputImageUploader(Result.success("openapi/input_file.png"))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig().copy(imageInputNodeId = "10")),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = uploader,
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("img2img prompt")
+        viewModel.onInputImageSelected(Uri.parse("content://media/1"), "picked.png")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(1, uploader.uploadCallCount)
+        assertEquals("openapi/input_file.png", generationRepository.lastInput?.uploadedImageFileName)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `retry reuses previously uploaded image fileName without reupload`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
+        val uploader = FakeInputImageUploader(Result.success("openapi/input_file.png"))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig().copy(imageInputNodeId = "10")),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = uploader,
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("img2img prompt")
+        viewModel.onInputImageSelected(Uri.parse("content://media/1"), "picked.png")
+        viewModel.generate()
+        advanceUntilIdle()
+        viewModel.retry()
+        advanceUntilIdle()
+
+        assertEquals(1, uploader.uploadCallCount)
+        assertEquals(2, generationRepository.generateCallCount)
+        assertEquals("openapi/input_file.png", generationRepository.lastInput?.uploadedImageFileName)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `generate does not submit task when image upload fails`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle))
+        val uploader = FakeInputImageUploader(Result.failure(IllegalStateException("Upload failed")))
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig().copy(imageInputNodeId = "10")),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = generationRepository,
+            inputImageUploader = uploader,
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("img2img prompt")
+        viewModel.onInputImageSelected(Uri.parse("content://media/1"), "picked.png")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(1, uploader.uploadCallCount)
+        assertEquals(0, generationRepository.generateCallCount)
+        assertTrue(viewModel.uiState.value.generationState is GenerationState.Failed)
         Dispatchers.resetMain()
     }
 
@@ -218,13 +309,29 @@ class GenerateViewModelTest {
         private val flow: Flow<GenerationState>,
     ) : GenerationRepository {
         var lastInput: GenerationInput? = null
+        var generateCallCount: Int = 0
 
         override fun generateAndPoll(
             config: WorkflowConfig,
             input: GenerationInput,
         ): Flow<GenerationState> {
+            generateCallCount += 1
             lastInput = input
             return flow
+        }
+    }
+
+    private class FakeInputImageUploader(
+        private val result: Result<String> = Result.success("openapi/default.png"),
+    ) : InputImageUploader {
+        var uploadCallCount: Int = 0
+
+        override suspend fun uploadInputImage(
+            apiKey: String,
+            imageUri: Uri,
+        ): Result<String> {
+            uploadCallCount += 1
+            return result
         }
     }
 

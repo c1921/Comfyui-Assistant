@@ -127,6 +127,83 @@ class WorkflowConfigValidatorTest {
     }
 
     @Test
+    fun `validateForGenerate fails when image input is selected but image input nodeId is missing`() {
+        val config = validConfig()
+
+        val error = WorkflowConfigValidator.validateForGenerate(
+            config = config,
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.IMAGE,
+                hasInputImage = true,
+            ),
+        )
+
+        assertEquals("Please configure image input nodeId first.", error)
+    }
+
+    @Test
+    fun `validateForGenerate allows image input when image input nodeId is configured`() {
+        val config = validConfig().copy(imageInputNodeId = "10")
+
+        val error = WorkflowConfigValidator.validateForGenerate(
+            config = config,
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.IMAGE,
+                hasInputImage = true,
+            ),
+        )
+
+        assertNull(error)
+    }
+
+    @Test
+    fun `validateForGenerate fails when video image input is selected but mapping is missing`() {
+        val config = validConfig().copy(
+            videoWorkflowId = "video-workflow",
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+        )
+
+        val error = WorkflowConfigValidator.validateForGenerate(
+            config = config,
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.VIDEO,
+                hasInputImage = true,
+            ),
+        )
+
+        assertEquals("Please configure video image input nodeId first.", error)
+    }
+
+    @Test
+    fun `validateForGenerate allows video image input when mapping is configured`() {
+        val config = validConfig().copy(
+            videoWorkflowId = "video-workflow",
+            videoPromptNodeId = "12",
+            videoPromptFieldName = "text",
+            videoImageInputNodeId = "13",
+        )
+
+        val error = WorkflowConfigValidator.validateForGenerate(
+            config = config,
+            input = GenerationInput(
+                prompt = "test prompt",
+                negative = "",
+                mode = GenerationMode.VIDEO,
+                hasInputImage = true,
+            ),
+        )
+
+        assertNull(error)
+    }
+
+    @Test
     fun `detectMediaKind returns image for png output`() {
         val output = GeneratedOutput(
             fileUrl = "https://example.com/output.png",

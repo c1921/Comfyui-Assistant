@@ -59,6 +59,10 @@ class SettingsViewModel(
         configDraftStore.update { it.copy(sizeNodeId = value) }
     }
 
+    fun onImageInputNodeIdChanged(value: String) {
+        configDraftStore.update { it.copy(imageInputNodeId = value) }
+    }
+
     fun onVideoWorkflowIdChanged(value: String) {
         configDraftStore.update { it.copy(videoWorkflowId = value) }
     }
@@ -69,6 +73,10 @@ class SettingsViewModel(
 
     fun onVideoPromptFieldNameChanged(value: String) {
         configDraftStore.update { it.copy(videoPromptFieldName = value) }
+    }
+
+    fun onVideoImageInputNodeIdChanged(value: String) {
+        configDraftStore.update { it.copy(videoImageInputNodeId = value) }
     }
 
     fun onDecodePasswordChanged(value: String) {
@@ -117,9 +125,11 @@ class SettingsViewModel(
                         negativeNodeId = config.negativeNodeId,
                         negativeFieldName = config.negativeFieldName,
                         sizeNodeId = config.sizeNodeId,
+                        imageInputNodeId = config.imageInputNodeId,
                         videoWorkflowId = config.videoWorkflowId,
                         videoPromptNodeId = config.videoPromptNodeId,
                         videoPromptFieldName = config.videoPromptFieldName,
+                        videoImageInputNodeId = config.videoImageInputNodeId,
                         decodePassword = config.decodePassword,
                     )
                 }

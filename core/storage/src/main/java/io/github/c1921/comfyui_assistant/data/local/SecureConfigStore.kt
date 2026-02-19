@@ -44,9 +44,11 @@ class SecureConfigStore(
             negativeNodeId = prefs.getString(KEY_NEGATIVE_NODE_ID, "").orEmpty(),
             negativeFieldName = prefs.getString(KEY_NEGATIVE_FIELD_NAME, "").orEmpty(),
             sizeNodeId = sizeNodeId,
+            imageInputNodeId = prefs.getString(KEY_IMAGE_INPUT_NODE_ID, "").orEmpty(),
             videoWorkflowId = prefs.getString(KEY_VIDEO_WORKFLOW_ID, "").orEmpty(),
             videoPromptNodeId = prefs.getString(KEY_VIDEO_PROMPT_NODE_ID, "").orEmpty(),
             videoPromptFieldName = prefs.getString(KEY_VIDEO_PROMPT_FIELD_NAME, "").orEmpty(),
+            videoImageInputNodeId = prefs.getString(KEY_VIDEO_IMAGE_INPUT_NODE_ID, "").orEmpty(),
             decodePassword = prefs.getString(KEY_DECODE_PASSWORD, "").orEmpty(),
         )
     }
@@ -60,9 +62,11 @@ class SecureConfigStore(
             putString(KEY_NEGATIVE_NODE_ID, config.negativeNodeId.trim())
             putString(KEY_NEGATIVE_FIELD_NAME, config.negativeFieldName.trim())
             putString(KEY_SIZE_NODE_ID, config.sizeNodeId.trim())
+            putString(KEY_IMAGE_INPUT_NODE_ID, config.imageInputNodeId.trim())
             putString(KEY_VIDEO_WORKFLOW_ID, config.videoWorkflowId.trim())
             putString(KEY_VIDEO_PROMPT_NODE_ID, config.videoPromptNodeId.trim())
             putString(KEY_VIDEO_PROMPT_FIELD_NAME, config.videoPromptFieldName.trim())
+            putString(KEY_VIDEO_IMAGE_INPUT_NODE_ID, config.videoImageInputNodeId.trim())
             putString(KEY_DECODE_PASSWORD, config.decodePassword)
         }
     }
@@ -80,9 +84,11 @@ class SecureConfigStore(
         const val KEY_NEGATIVE_NODE_ID = "negative_node_id"
         const val KEY_NEGATIVE_FIELD_NAME = "negative_field_name"
         const val KEY_SIZE_NODE_ID = "size_node_id"
+        const val KEY_IMAGE_INPUT_NODE_ID = "image_input_node_id"
         const val KEY_VIDEO_WORKFLOW_ID = "video_workflow_id"
         const val KEY_VIDEO_PROMPT_NODE_ID = "video_prompt_node_id"
         const val KEY_VIDEO_PROMPT_FIELD_NAME = "video_prompt_field_name"
+        const val KEY_VIDEO_IMAGE_INPUT_NODE_ID = "video_image_input_node_id"
         const val KEY_SIZE_WIDTH_NODE_ID_LEGACY = "size_width_node_id"
         const val KEY_SIZE_HEIGHT_NODE_ID_LEGACY = "size_height_node_id"
         const val KEY_DECODE_PASSWORD = "decode_password"

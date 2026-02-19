@@ -9,6 +9,7 @@ import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 object WorkflowRequestBuilder {
     private const val WIDTH_FIELD_NAME = "width"
     private const val HEIGHT_FIELD_NAME = "height"
+    private const val IMAGE_INPUT_FIELD_NAME = "image"
 
     fun buildNodeInfoList(config: WorkflowConfig, input: GenerationInput): List<NodeInfoItem> {
         return when (input.mode) {
@@ -52,6 +53,13 @@ object WorkflowRequestBuilder {
                 fieldValue = input.imagePreset.height,
             )
         }
+        if (input.uploadedImageFileName.isNotBlank() && config.imageInputNodeId.isNotBlank()) {
+            result += NodeInfoItem(
+                nodeId = config.imageInputNodeId.trim(),
+                fieldName = IMAGE_INPUT_FIELD_NAME,
+                fieldValue = input.uploadedImageFileName.trim(),
+            )
+        }
         return result
     }
 
@@ -59,12 +67,20 @@ object WorkflowRequestBuilder {
         config: WorkflowConfig,
         input: GenerationInput,
     ): List<NodeInfoItem> {
-        return listOf(
+        val result = mutableListOf(
             NodeInfoItem(
                 nodeId = config.videoPromptNodeId.trim(),
                 fieldName = config.videoPromptFieldName.trim(),
                 fieldValue = input.prompt.trim(),
             )
         )
+        if (input.uploadedImageFileName.isNotBlank() && config.videoImageInputNodeId.isNotBlank()) {
+            result += NodeInfoItem(
+                nodeId = config.videoImageInputNodeId.trim(),
+                fieldName = IMAGE_INPUT_FIELD_NAME,
+                fieldValue = input.uploadedImageFileName.trim(),
+            )
+        }
+        return result
     }
 }

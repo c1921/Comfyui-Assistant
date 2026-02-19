@@ -1,5 +1,6 @@
 package io.github.c1921.comfyui_assistant.feature.generate
 
+import android.net.Uri
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,6 +16,7 @@ import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
+import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 import org.junit.Rule
 import org.junit.Test
@@ -45,6 +47,8 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
                 onGenerate = {},
                 onRetry = {},
                 imageLoader = imageLoader,
@@ -73,6 +77,8 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
                 onGenerate = {},
                 onRetry = {},
                 imageLoader = imageLoader,
@@ -121,6 +127,8 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
                 onGenerate = {},
                 onRetry = {},
                 imageLoader = imageLoader,
@@ -161,6 +169,8 @@ class GenerateScreenInstrumentedTest {
                 onNegativeChanged = {},
                 onGenerationModeChanged = {},
                 onImagePresetChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
                 onGenerate = {},
                 onRetry = {},
                 imageLoader = imageLoader,
@@ -171,6 +181,68 @@ class GenerateScreenInstrumentedTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(UiTestTags.VIDEO_RESULT_PLAYER).assertIsDisplayed()
+    }
+
+    @Test
+    fun inputImagePicker_visibilityFollowsConfiguredNodeId() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val imageLoader = ImageLoader.Builder(context).build()
+        val visibleState = GenerateUiState(
+            selectedMode = GenerationMode.IMAGE,
+            config = WorkflowConfig(imageInputNodeId = "10"),
+        )
+
+        composeRule.setContent {
+            GenerateScreen(
+                state = visibleState,
+                isGenerateEnabled = true,
+                onPromptChanged = {},
+                onNegativeChanged = {},
+                onGenerationModeChanged = {},
+                onImagePresetChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
+                onGenerate = {},
+                onRetry = {},
+                imageLoader = imageLoader,
+                previewMediaResolver = passthroughResolver(),
+                onDownloadResult = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.INPUT_IMAGE_PICK_BUTTON).assertIsDisplayed()
+    }
+
+    @Test
+    fun selectedInputImageLabel_isShown_whenImageIsSelected() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val imageLoader = ImageLoader.Builder(context).build()
+        val state = GenerateUiState(
+            selectedMode = GenerationMode.IMAGE,
+            config = WorkflowConfig(imageInputNodeId = "10"),
+            selectedInputImageUri = Uri.parse("content://media/selected"),
+            selectedInputImageDisplayName = "picked.png",
+        )
+
+        composeRule.setContent {
+            GenerateScreen(
+                state = state,
+                isGenerateEnabled = true,
+                onPromptChanged = {},
+                onNegativeChanged = {},
+                onGenerationModeChanged = {},
+                onImagePresetChanged = {},
+                onInputImageSelected = { _, _ -> },
+                onClearInputImage = {},
+                onGenerate = {},
+                onRetry = {},
+                imageLoader = imageLoader,
+                previewMediaResolver = passthroughResolver(),
+                onDownloadResult = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.INPUT_IMAGE_SELECTED_LABEL).assertIsDisplayed()
     }
 
     private fun passthroughResolver(): PreviewMediaResolver {

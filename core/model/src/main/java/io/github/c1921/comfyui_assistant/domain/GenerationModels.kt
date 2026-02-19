@@ -10,9 +10,11 @@ data class WorkflowConfig(
     val negativeNodeId: String = "",
     val negativeFieldName: String = "",
     val sizeNodeId: String = "",
+    val imageInputNodeId: String = "",
     val videoWorkflowId: String = "",
     val videoPromptNodeId: String = "",
     val videoPromptFieldName: String = "",
+    val videoImageInputNodeId: String = "",
     val decodePassword: String = "",
 )
 
@@ -26,6 +28,8 @@ data class GenerationInput(
     val negative: String,
     val mode: GenerationMode = GenerationMode.IMAGE,
     val imagePreset: ImageAspectPreset = ImageAspectPreset.RATIO_1_1,
+    val hasInputImage: Boolean = false,
+    val uploadedImageFileName: String = "",
 )
 
 enum class ImageAspectPreset(

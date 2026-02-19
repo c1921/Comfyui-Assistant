@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
             configRepository = appContainer.configRepository,
             configDraftStore = appContainer.configDraftStore,
             generationRepository = appContainer.generationRepository,
+            inputImageUploader = appContainer.inputImageUploader,
             mediaSaver = appContainer.mediaSaver,
         )
     }
@@ -53,6 +54,8 @@ class MainActivity : ComponentActivity() {
                     onNegativeChanged = generateViewModel::onNegativeChanged,
                     onGenerationModeChanged = generateViewModel::onGenerationModeChanged,
                     onImagePresetChanged = generateViewModel::onImagePresetChanged,
+                    onInputImageSelected = generateViewModel::onInputImageSelected,
+                    onClearInputImage = generateViewModel::onClearInputImage,
                     onGenerate = generateViewModel::generate,
                     onRetry = generateViewModel::retry,
                     onDownloadResult = generateViewModel::downloadResult,
@@ -63,9 +66,11 @@ class MainActivity : ComponentActivity() {
                     onNegativeNodeIdChanged = settingsViewModel::onNegativeNodeIdChanged,
                     onNegativeFieldNameChanged = settingsViewModel::onNegativeFieldNameChanged,
                     onSizeNodeIdChanged = settingsViewModel::onSizeNodeIdChanged,
+                    onImageInputNodeIdChanged = settingsViewModel::onImageInputNodeIdChanged,
                     onVideoWorkflowIdChanged = settingsViewModel::onVideoWorkflowIdChanged,
                     onVideoPromptNodeIdChanged = settingsViewModel::onVideoPromptNodeIdChanged,
                     onVideoPromptFieldNameChanged = settingsViewModel::onVideoPromptFieldNameChanged,
+                    onVideoImageInputNodeIdChanged = settingsViewModel::onVideoImageInputNodeIdChanged,
                     onDecodePasswordChanged = settingsViewModel::onDecodePasswordChanged,
                     onSaveSettings = settingsViewModel::saveSettings,
                     onClearApiKey = settingsViewModel::clearApiKey,
