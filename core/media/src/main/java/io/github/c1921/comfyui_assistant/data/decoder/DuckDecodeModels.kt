@@ -24,12 +24,12 @@ sealed interface DuckDecodeFailureReason {
 
     data object PasswordRequired : DuckDecodeFailureReason {
         override val shouldNotifyUser: Boolean = true
-        override val message: String = "Encrypted image requires a decode password."
+        override val message: String = "Encrypted payload requires a decode password."
     }
 
     data object WrongPassword : DuckDecodeFailureReason {
         override val shouldNotifyUser: Boolean = true
-        override val message: String = "Decode password is incorrect. Saved original image instead."
+        override val message: String = "Decode password is incorrect. Saved original file instead."
     }
 
     data class NonImagePayload(

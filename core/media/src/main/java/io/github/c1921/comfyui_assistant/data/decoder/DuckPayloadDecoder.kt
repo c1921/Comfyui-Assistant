@@ -1,6 +1,7 @@
 package io.github.c1921.comfyui_assistant.data.decoder
 
 import android.graphics.BitmapFactory
+import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
@@ -9,14 +10,36 @@ class DuckPayloadDecoder {
         imageBytes: ByteArray,
         password: String,
     ): DuckDecodeOutcome {
+        return when (val outcome = decodeMediaIfCarrierImage(imageBytes, password)) {
+            is DuckMediaDecodeOutcome.DecodedImage ->
+                DuckDecodeOutcome.Decoded(
+                    imageBytes = outcome.imageBytes,
+                    extension = outcome.extension,
+                )
+
+            is DuckMediaDecodeOutcome.DecodedVideo ->
+                DuckDecodeOutcome.Fallback(
+                    DuckDecodeFailureReason.NonImagePayload(
+                        extension = outcome.extension,
+                    ),
+                )
+
+            is DuckMediaDecodeOutcome.Fallback -> DuckDecodeOutcome.Fallback(outcome.reason)
+        }
+    }
+
+    fun decodeMediaIfCarrierImage(
+        imageBytes: ByteArray,
+        password: String,
+    ): DuckMediaDecodeOutcome {
         val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-            ?: return DuckDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            ?: return DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
 
         return try {
             val width = bitmap.width
             val height = bitmap.height
             if (width <= 0 || height <= 0) {
-                DuckDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+                DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
             } else {
                 val pixels = IntArray(width * height)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
@@ -27,10 +50,10 @@ class DuckPayloadDecoder {
                     rgb[out++] = ((pixel shr 8) and 0xFF).toByte()
                     rgb[out++] = (pixel and 0xFF).toByte()
                 }
-                decodeFromRgb(rgb, width, height, password)
+                decodeMediaFromRgb(rgb, width, height, password)
             }
         } catch (_: Exception) {
-            DuckDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
         } finally {
             bitmap.recycle()
         }
@@ -42,12 +65,76 @@ class DuckPayloadDecoder {
         height: Int,
         password: String,
     ): DuckDecodeOutcome {
+        return when (
+            val outcome = decodePayloadFromRgb(
+                rgb = rgb,
+                width = width,
+                height = height,
+                password = password,
+                target = DecodeTarget.ImageOnly,
+            )
+        ) {
+            is PayloadDecodeResult.Image ->
+                DuckDecodeOutcome.Decoded(
+                    imageBytes = outcome.imageBytes,
+                    extension = outcome.extension,
+                )
+
+            is PayloadDecodeResult.Video ->
+                DuckDecodeOutcome.Fallback(
+                    DuckDecodeFailureReason.NonImagePayload(
+                        extension = outcome.sourceExtension.ifBlank { "unknown" },
+                    ),
+                )
+
+            is PayloadDecodeResult.Fallback -> DuckDecodeOutcome.Fallback(outcome.reason)
+        }
+    }
+
+    internal fun decodeMediaFromRgb(
+        rgb: ByteArray,
+        width: Int,
+        height: Int,
+        password: String,
+    ): DuckMediaDecodeOutcome {
+        return when (
+            val outcome = decodePayloadFromRgb(
+                rgb = rgb,
+                width = width,
+                height = height,
+                password = password,
+                target = DecodeTarget.Media,
+            )
+        ) {
+            is PayloadDecodeResult.Image ->
+                DuckMediaDecodeOutcome.DecodedImage(
+                    imageBytes = outcome.imageBytes,
+                    extension = outcome.extension,
+                )
+
+            is PayloadDecodeResult.Video ->
+                DuckMediaDecodeOutcome.DecodedVideo(
+                    videoBytes = outcome.videoBytes,
+                    extension = VIDEO_OUTPUT_EXTENSION,
+                )
+
+            is PayloadDecodeResult.Fallback -> DuckMediaDecodeOutcome.Fallback(outcome.reason)
+        }
+    }
+
+    private fun decodePayloadFromRgb(
+        rgb: ByteArray,
+        width: Int,
+        height: Int,
+        password: String,
+        target: DecodeTarget,
+    ): PayloadDecodeResult {
         if (width <= 0 || height <= 0) {
-            return DuckDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            return PayloadDecodeResult.Fallback(DuckDecodeFailureReason.NotCarrierImage)
         }
         val expectedSize = width * height * RGB_CHANNELS
         if (rgb.size < expectedSize) {
-            return DuckDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            return PayloadDecodeResult.Fallback(DuckDecodeFailureReason.NotCarrierImage)
         }
 
         val errors = mutableListOf<DuckDecodeFailureReason>()
@@ -56,20 +143,40 @@ class DuckPayloadDecoder {
                 val header = extractPayloadWithK(rgb, width, height, k)
                 val payload = parseHeader(header, password)
                 val normalizedExt = normalizeExtension(payload.extension)
-                if (!IMAGE_EXTENSIONS.contains(normalizedExt)) {
-                    throw DuckDecodeException(
-                        DuckDecodeFailureReason.NonImagePayload(
-                            extension = normalizedExt.ifBlank { "unknown" },
+                when {
+                    normalizedExt.endsWith(BINARY_PNG_EXTENSION_SUFFIX) -> {
+                        if (target == DecodeTarget.ImageOnly) {
+                            throw DuckDecodeException(
+                                DuckDecodeFailureReason.NonImagePayload(
+                                    extension = normalizedExt.ifBlank { "unknown" },
+                                ),
+                            )
+                        }
+                        val videoBytes = decodeBinaryPngPayloadToVideo(payload.data)
+                            ?: throw DuckDecodeException(DuckDecodeFailureReason.CorruptedPayload)
+                        return PayloadDecodeResult.Video(
+                            videoBytes = videoBytes,
+                            sourceExtension = normalizedExt,
                         )
-                    )
+                    }
+
+                    IMAGE_EXTENSIONS.contains(normalizedExt) -> {
+                        if (!matchesImageSignature(normalizedExt, payload.data)) {
+                            throw DuckDecodeException(DuckDecodeFailureReason.CorruptedPayload)
+                        }
+                        return PayloadDecodeResult.Image(
+                            imageBytes = payload.data,
+                            extension = normalizedExt,
+                        )
+                    }
+
+                    else ->
+                        throw DuckDecodeException(
+                            DuckDecodeFailureReason.NonImagePayload(
+                                extension = normalizedExt.ifBlank { "unknown" },
+                            ),
+                        )
                 }
-                if (!matchesImageSignature(normalizedExt, payload.data)) {
-                    throw DuckDecodeException(DuckDecodeFailureReason.CorruptedPayload)
-                }
-                return DuckDecodeOutcome.Decoded(
-                    imageBytes = payload.data,
-                    extension = normalizedExt,
-                )
             } catch (error: DuckDecodeException) {
                 errors += error.reason
             } catch (_: Exception) {
@@ -77,7 +184,84 @@ class DuckPayloadDecoder {
             }
         }
 
-        return DuckDecodeOutcome.Fallback(selectFallbackReason(errors))
+        return PayloadDecodeResult.Fallback(selectFallbackReason(errors))
+    }
+
+    private fun decodeBinaryPngPayloadToVideo(binaryPngPayload: ByteArray): ByteArray? {
+        decodeBinaryPngPayloadWithBitmapFactory(binaryPngPayload)?.let { return it }
+        return decodeBinaryPngPayloadWithImageIo(binaryPngPayload)
+    }
+
+    private fun decodeBinaryPngPayloadWithBitmapFactory(binaryPngPayload: ByteArray): ByteArray? {
+        val bitmap = try {
+            BitmapFactory.decodeByteArray(binaryPngPayload, 0, binaryPngPayload.size)
+        } catch (_: Throwable) {
+            null
+        } ?: return null
+        return try {
+            val width = bitmap.width
+            val height = bitmap.height
+            if (width <= 0 || height <= 0) return null
+
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val rawBytes = ByteArray(pixels.size * RGB_CHANNELS)
+            var out = 0
+            for (pixel in pixels) {
+                rawBytes[out++] = ((pixel shr 16) and 0xFF).toByte()
+                rawBytes[out++] = ((pixel shr 8) and 0xFF).toByte()
+                rawBytes[out++] = (pixel and 0xFF).toByte()
+            }
+            trimTrailingZeroBytes(rawBytes)
+        } catch (_: Exception) {
+            null
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun decodeBinaryPngPayloadWithImageIo(binaryPngPayload: ByteArray): ByteArray? {
+        return try {
+            val imageIoClass = Class.forName("javax.imageio.ImageIO")
+            val readMethod = imageIoClass.getMethod("read", java.io.InputStream::class.java)
+            val image = ByteArrayInputStream(binaryPngPayload).use { input ->
+                readMethod.invoke(null, input)
+            } ?: return null
+
+            val imageClass = image.javaClass
+            val getWidth = imageClass.getMethod("getWidth")
+            val getHeight = imageClass.getMethod("getHeight")
+            val width = getWidth.invoke(image) as Int
+            val height = getHeight.invoke(image) as Int
+            if (width <= 0 || height <= 0) return null
+
+            val getRgb = imageClass.getMethod(
+                "getRGB",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+            )
+            val rawBytes = ByteArray(width * height * RGB_CHANNELS)
+            var out = 0
+            for (row in 0 until height) {
+                for (col in 0 until width) {
+                    val pixel = getRgb.invoke(image, col, row) as Int
+                    rawBytes[out++] = ((pixel shr 16) and 0xFF).toByte()
+                    rawBytes[out++] = ((pixel shr 8) and 0xFF).toByte()
+                    rawBytes[out++] = (pixel and 0xFF).toByte()
+                }
+            }
+            trimTrailingZeroBytes(rawBytes)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun trimTrailingZeroBytes(bytes: ByteArray): ByteArray {
+        var end = bytes.size
+        while (end > 0 && bytes[end - 1] == 0.toByte()) {
+            end -= 1
+        }
+        return bytes.copyOf(end)
     }
 
     private fun extractPayloadWithK(
@@ -350,6 +534,27 @@ class DuckPayloadDecoder {
         val extension: String,
     )
 
+    private sealed interface PayloadDecodeResult {
+        data class Image(
+            val imageBytes: ByteArray,
+            val extension: String,
+        ) : PayloadDecodeResult
+
+        data class Video(
+            val videoBytes: ByteArray,
+            val sourceExtension: String,
+        ) : PayloadDecodeResult
+
+        data class Fallback(
+            val reason: DuckDecodeFailureReason,
+        ) : PayloadDecodeResult
+    }
+
+    private enum class DecodeTarget {
+        ImageOnly,
+        Media,
+    }
+
     private class DuckDecodeException(
         val reason: DuckDecodeFailureReason,
     ) : RuntimeException()
@@ -365,6 +570,8 @@ class DuckPayloadDecoder {
         const val DATA_LEN_BYTES = 4
         val EMPTY_BYTES = ByteArray(0)
         val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+        const val BINARY_PNG_EXTENSION_SUFFIX = ".binpng"
+        const val VIDEO_OUTPUT_EXTENSION = "mp4"
         val HEX_DIGITS = charArrayOf(
             '0', '1', '2', '3', '4', '5', '6', '7',
             '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',

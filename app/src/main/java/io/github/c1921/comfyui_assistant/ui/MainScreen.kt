@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import coil.ImageLoader
 import io.github.c1921.comfyui_assistant.R
+import io.github.c1921.comfyui_assistant.data.repository.PreviewMediaResolver
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
@@ -63,6 +64,7 @@ fun MainScreen(
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
     imageLoader: ImageLoader,
+    previewMediaResolver: PreviewMediaResolver,
     generateMessages: Flow<String>,
     settingsMessages: Flow<String>,
 ) {
@@ -107,6 +109,7 @@ fun MainScreen(
                     onGenerate = onGenerate,
                     onRetry = onRetry,
                     imageLoader = imageLoader,
+                    previewMediaResolver = previewMediaResolver,
                     onDownloadResult = onDownloadResult,
                 )
 

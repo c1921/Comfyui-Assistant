@@ -133,3 +133,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - Download supports both media types:
   - Images -> `Pictures/RunningHubAssistant`
   - Videos -> `Movies/RunningHubAssistant`
+
+## 11. SS_tools duck video decode update (2026-02-19)
+
+- Added SS_tools-style payload decode for duck carrier images with `*.binpng` payload extension.
+- Video payload preview now auto-resolves from image output to local playable `.mp4`.
+- Download now supports decoded duck video payload and saves to `Movies/RunningHubAssistant`.
+- Output extension for decoded duck video payload is fixed to `.mp4`.

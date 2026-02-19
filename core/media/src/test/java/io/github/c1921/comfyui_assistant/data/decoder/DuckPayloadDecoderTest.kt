@@ -1,8 +1,10 @@
 package io.github.c1921.comfyui_assistant.data.decoder
 
 import java.io.ByteArrayOutputStream
+import java.awt.image.BufferedImage
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import javax.imageio.ImageIO
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -119,6 +121,70 @@ class DuckPayloadDecoderTest {
 
         val outcome = decoder.decodeFromRgb(rgb, 80, 80, "")
         val fallback = outcome as DuckDecodeOutcome.Fallback
+        assertTrue(fallback.reason is DuckDecodeFailureReason.CorruptedPayload)
+    }
+
+    @Test
+    fun `decodeMediaFromRgb decodes mp4 binpng payload without password`() {
+        val sampleVideoBytes = byteArrayOf(
+            0x01.toByte(), 0x02.toByte(), 0x03.toByte(),
+            0x10.toByte(), 0x20.toByte(), 0x30.toByte(),
+            0x40.toByte(),
+        )
+        val binaryPngBytes = bytesToBinaryPngBytes(sampleVideoBytes)
+        val rgb = buildCarrierRgb(
+            rawPayload = binaryPngBytes,
+            extension = "mp4.binpng",
+            password = "",
+            k = 2,
+            width = 80,
+            height = 80,
+        )
+
+        val outcome = decoder.decodeMediaFromRgb(rgb, 80, 80, "")
+        val decoded = outcome as DuckMediaDecodeOutcome.DecodedVideo
+
+        assertEquals("mp4", decoded.extension)
+        assertArrayEquals(sampleVideoBytes, decoded.videoBytes)
+    }
+
+    @Test
+    fun `decodeMediaFromRgb returns wrong password for encrypted mp4 binpng payload`() {
+        val sampleVideoBytes = byteArrayOf(
+            0x01.toByte(), 0x02.toByte(), 0x03.toByte(),
+            0x10.toByte(), 0x20.toByte(), 0x30.toByte(),
+            0x40.toByte(),
+        )
+        val binaryPngBytes = bytesToBinaryPngBytes(sampleVideoBytes)
+        val rgb = buildCarrierRgb(
+            rawPayload = binaryPngBytes,
+            extension = "mp4.binpng",
+            password = "secret123",
+            k = 2,
+            width = 80,
+            height = 80,
+        )
+
+        val outcome = decoder.decodeMediaFromRgb(rgb, 80, 80, "invalid")
+        val fallback = outcome as DuckMediaDecodeOutcome.Fallback
+
+        assertTrue(fallback.reason is DuckDecodeFailureReason.WrongPassword)
+    }
+
+    @Test
+    fun `decodeMediaFromRgb returns corrupted payload when mp4 binpng content is invalid`() {
+        val rgb = buildCarrierRgb(
+            rawPayload = "not_a_png".toByteArray(StandardCharsets.UTF_8),
+            extension = "mp4.binpng",
+            password = "",
+            k = 2,
+            width = 80,
+            height = 80,
+        )
+
+        val outcome = decoder.decodeMediaFromRgb(rgb, 80, 80, "")
+        val fallback = outcome as DuckMediaDecodeOutcome.Fallback
+
         assertTrue(fallback.reason is DuckDecodeFailureReason.CorruptedPayload)
     }
 
@@ -239,6 +305,33 @@ class DuckPayloadDecoderTest {
             ((value ushr 8) and 0xFF).toByte(),
             (value and 0xFF).toByte(),
         )
+    }
+
+    private fun bytesToBinaryPngBytes(
+        data: ByteArray,
+        width: Int = 8,
+    ): ByteArray {
+        val safeWidth = width.coerceAtLeast(1)
+        val pixels = (data.size + 2) / 3
+        val height = maxOf(1, (pixels + safeWidth - 1) / safeWidth)
+        val totalBytes = safeWidth * height * 3
+        val padded = data + ByteArray(totalBytes - data.size)
+
+        val image = BufferedImage(safeWidth, height, BufferedImage.TYPE_INT_RGB)
+        var cursor = 0
+        for (row in 0 until height) {
+            for (col in 0 until safeWidth) {
+                val red = padded[cursor++].toInt() and 0xFF
+                val green = padded[cursor++].toInt() and 0xFF
+                val blue = padded[cursor++].toInt() and 0xFF
+                val rgb = (red shl 16) or (green shl 8) or blue
+                image.setRGB(col, row, rgb)
+            }
+        }
+
+        val output = ByteArrayOutputStream()
+        ImageIO.write(image, "png", output)
+        return output.toByteArray()
     }
 
     private fun generateKeyStream(

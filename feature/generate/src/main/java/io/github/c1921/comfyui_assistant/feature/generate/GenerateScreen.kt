@@ -26,6 +26,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,8 @@ import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckDecodeRequestParams.enableDuckAutoDecode
+import io.github.c1921.comfyui_assistant.data.repository.PreviewMediaResolution
+import io.github.c1921.comfyui_assistant.data.repository.PreviewMediaResolver
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
@@ -61,6 +64,7 @@ fun GenerateScreen(
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
     imageLoader: ImageLoader,
+    previewMediaResolver: PreviewMediaResolver,
     onDownloadResult: (GeneratedOutput, Int) -> Unit,
 ) {
     val context = LocalContext.current
@@ -209,17 +213,19 @@ fun GenerateScreen(
             Text(stringResource(R.string.gen_results_title))
             generationState.results.forEachIndexed { index, result ->
                 when (resolveOutputKind(result, fallbackMode = state.selectedMode)) {
-                    OutputMediaKind.IMAGE -> ImageResultCard(
+                    OutputMediaKind.IMAGE -> ResolvedImageResultCard(
                         result = result,
                         decodePassword = state.config.decodePassword,
                         imageLoader = imageLoader,
                         context = context,
+                        previewMediaResolver = previewMediaResolver,
                         index = index,
                         onDownloadResult = onDownloadResult,
                     )
 
                     OutputMediaKind.VIDEO -> VideoResultCard(
                         result = result,
+                        playbackUrl = result.fileUrl,
                         index = index,
                         onDownloadResult = onDownloadResult,
                     )
@@ -244,6 +250,53 @@ fun GenerateScreen(
         )
         Text(stringResource(R.string.gen_workflow_tip))
     }
+}
+
+@Composable
+private fun ResolvedImageResultCard(
+    result: GeneratedOutput,
+    decodePassword: String,
+    imageLoader: ImageLoader,
+    context: android.content.Context,
+    previewMediaResolver: PreviewMediaResolver,
+    index: Int,
+    onDownloadResult: (GeneratedOutput, Int) -> Unit,
+) {
+    val fallbackResolution = remember(result.fileUrl) {
+        PreviewMediaResolution(
+            kind = OutputMediaKind.IMAGE,
+            playbackUrl = result.fileUrl,
+            isDecodedFromDuck = false,
+        )
+    }
+    var previewResolution by remember(result.fileUrl, decodePassword) { mutableStateOf(fallbackResolution) }
+
+    LaunchedEffect(result.fileUrl, result.fileType, decodePassword) {
+        previewResolution = runCatching {
+            previewMediaResolver.resolve(result, decodePassword)
+        }.getOrElse {
+            fallbackResolution
+        }
+    }
+
+    if (previewResolution.kind == OutputMediaKind.VIDEO && previewResolution.playbackUrl.isNotBlank()) {
+        VideoResultCard(
+            result = result,
+            playbackUrl = previewResolution.playbackUrl,
+            index = index,
+            onDownloadResult = onDownloadResult,
+        )
+        return
+    }
+
+    ImageResultCard(
+        result = result,
+        decodePassword = decodePassword,
+        imageLoader = imageLoader,
+        context = context,
+        index = index,
+        onDownloadResult = onDownloadResult,
+    )
 }
 
 @Composable
@@ -292,13 +345,14 @@ private fun ImageResultCard(
 @Composable
 private fun VideoResultCard(
     result: GeneratedOutput,
+    playbackUrl: String,
     index: Int,
     onDownloadResult: (GeneratedOutput, Int) -> Unit,
 ) {
-    val videoUri = remember(result.fileUrl) { Uri.parse(result.fileUrl) }
+    val videoUri = remember(playbackUrl) { Uri.parse(playbackUrl) }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            key(result.fileUrl) {
+            key(playbackUrl) {
                 AndroidView(
                     factory = { viewContext ->
                         VideoView(viewContext).apply {

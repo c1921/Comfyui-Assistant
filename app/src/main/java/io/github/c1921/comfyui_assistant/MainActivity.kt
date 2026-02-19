@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
                     onSaveSettings = settingsViewModel::saveSettings,
                     onClearApiKey = settingsViewModel::clearApiKey,
                     imageLoader = appContainer.imageLoader,
+                    previewMediaResolver = appContainer.previewMediaResolver,
                     generateMessages = generateViewModel.messages,
                     settingsMessages = settingsViewModel.messages,
                 )

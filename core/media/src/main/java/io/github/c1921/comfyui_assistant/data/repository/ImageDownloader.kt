@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import io.github.c1921.comfyui_assistant.data.decoder.DuckDecodeOutcome
+import io.github.c1921.comfyui_assistant.data.decoder.DuckMediaDecodeOutcome
 import io.github.c1921.comfyui_assistant.data.decoder.DuckPayloadDecoder
 import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
@@ -34,12 +35,12 @@ class ImageDownloader(
             val resolvedExtension = resolveExtension(output.fileType, output.fileUrl)
             val savedKind = resolveSavedKind(output, resolvedExtension)
             when (savedKind) {
-                OutputMediaKind.IMAGE -> saveImage(
-                    output = output,
+                OutputMediaKind.IMAGE -> saveImageOrDecodedMedia(
                     taskId = taskId,
                     index = index,
                     decodePassword = decodePassword,
                     downloadedBytes = downloadedBytes,
+                    resolvedExtension = resolvedExtension,
                 )
 
                 OutputMediaKind.VIDEO -> saveVideo(
@@ -49,12 +50,12 @@ class ImageDownloader(
                     resolvedExtension = resolvedExtension,
                 )
 
-                OutputMediaKind.UNKNOWN -> saveImage(
-                    output = output,
+                OutputMediaKind.UNKNOWN -> saveImageOrDecodedMedia(
                     taskId = taskId,
                     index = index,
                     decodePassword = decodePassword,
                     downloadedBytes = downloadedBytes,
+                    resolvedExtension = resolvedExtension,
                 )
             }
         }
@@ -75,37 +76,68 @@ class ImageDownloader(
         }
     }
 
-    private fun saveImage(
-        output: GeneratedOutput,
+    private fun saveImageOrDecodedMedia(
         taskId: String,
         index: Int,
         decodePassword: String,
         downloadedBytes: ByteArray,
+        resolvedExtension: String,
     ): DownloadToGalleryResult {
-        val decodeOutcome = payloadDecoder.decodeIfCarrierImage(
+        val decodeOutcome = payloadDecoder.decodeMediaIfCarrierImage(
             imageBytes = downloadedBytes,
             password = decodePassword,
         )
-        val fallbackExtension = resolveExtension(output.fileType, output.fileUrl)
-        val imageFallbackExtension = if (fallbackExtension in VIDEO_EXTENSIONS) "jpg" else fallbackExtension
-        val (bytesToSave, extension) = when (decodeOutcome) {
-            is DuckDecodeOutcome.Decoded -> decodeOutcome.imageBytes to decodeOutcome.extension
-            is DuckDecodeOutcome.Fallback -> downloadedBytes to imageFallbackExtension
+        return when (decodeOutcome) {
+            is DuckMediaDecodeOutcome.DecodedImage -> {
+                val extension = decodeOutcome.extension
+                val mimeType = resolveImageMimeType(extension)
+                val fileName = buildFileName(taskId, index, extension)
+                writeToMediaStore(
+                    bytes = decodeOutcome.imageBytes,
+                    mimeType = mimeType,
+                    fileName = fileName,
+                    relativePath = "Pictures/RunningHubAssistant",
+                    collectionUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                )
+                DownloadToGalleryResult(
+                    fileName = fileName,
+                    savedKind = OutputMediaKind.IMAGE,
+                    decodeOutcome = DuckDecodeOutcome.Decoded(
+                        imageBytes = decodeOutcome.imageBytes,
+                        extension = extension,
+                    ),
+                )
+            }
+
+            is DuckMediaDecodeOutcome.DecodedVideo -> {
+                saveVideo(
+                    taskId = taskId,
+                    index = index,
+                    downloadedBytes = decodeOutcome.videoBytes,
+                    resolvedExtension = decodeOutcome.extension,
+                )
+            }
+
+            is DuckMediaDecodeOutcome.Fallback -> {
+                val imageFallbackExtension = if (resolvedExtension in VIDEO_EXTENSIONS) "jpg" else resolvedExtension
+                val mimeType = resolveImageMimeType(imageFallbackExtension)
+                val fileName = buildFileName(taskId, index, imageFallbackExtension)
+                writeToMediaStore(
+                    bytes = downloadedBytes,
+                    mimeType = mimeType,
+                    fileName = fileName,
+                    relativePath = "Pictures/RunningHubAssistant",
+                    collectionUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                )
+                DownloadToGalleryResult(
+                    fileName = fileName,
+                    savedKind = OutputMediaKind.IMAGE,
+                    decodeOutcome = DuckDecodeOutcome.Fallback(
+                        reason = decodeOutcome.reason,
+                    ),
+                )
+            }
         }
-        val mimeType = resolveImageMimeType(extension)
-        val fileName = buildFileName(taskId, index, extension)
-        writeToMediaStore(
-            bytes = bytesToSave,
-            mimeType = mimeType,
-            fileName = fileName,
-            relativePath = "Pictures/RunningHubAssistant",
-            collectionUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        )
-        return DownloadToGalleryResult(
-            fileName = fileName,
-            savedKind = OutputMediaKind.IMAGE,
-            decodeOutcome = decodeOutcome,
-        )
     }
 
     private fun saveVideo(
