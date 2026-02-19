@@ -4,8 +4,11 @@ import android.net.Uri
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.repository.DownloadToGalleryResult
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
+import io.github.c1921.comfyui_assistant.data.repository.InputImageSelectionStore
 import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
 import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
+import io.github.c1921.comfyui_assistant.data.repository.PersistedInputImageSelection
+import io.github.c1921.comfyui_assistant.data.repository.PersistedInputImageSelections
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationState
@@ -17,7 +20,9 @@ import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -43,6 +48,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -64,6 +70,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -89,6 +96,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -114,6 +122,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -138,6 +147,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -161,6 +171,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -183,6 +194,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -205,6 +217,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -228,6 +241,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -251,6 +265,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -278,6 +293,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = uploader,
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -303,6 +319,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = uploader,
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -331,6 +348,7 @@ class GenerateViewModelTest {
             configDraftStore = InMemoryConfigDraftStore(),
             generationRepository = generationRepository,
             inputImageUploader = uploader,
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
             mediaSaver = FakeMediaSaver(),
         )
 
@@ -343,6 +361,182 @@ class GenerateViewModelTest {
         assertEquals(1, uploader.uploadCallCount)
         assertEquals(0, generationRepository.generateCallCount)
         assertTrue(viewModel.uiState.value.generationState is GenerationState.Failed)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `input image selection is hidden in unmapped mode and restored when returning`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig().copy(imageInputNodeId = "10")),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        val selectedUri = Uri.parse("content://media/image_mode")
+        viewModel.onInputImageSelected(selectedUri, "image_mode.png")
+        advanceUntilIdle()
+        assertEquals(selectedUri, viewModel.uiState.value.selectedInputImageUri)
+
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.selectedInputImageUri)
+
+        viewModel.onGenerationModeChanged(GenerationMode.IMAGE)
+        advanceUntilIdle()
+        assertEquals(selectedUri, viewModel.uiState.value.selectedInputImageUri)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `load restores persisted selection for current mode`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val restoredSelection = PersistedInputImageSelection(
+            uri = Uri.parse("file:///persisted/image.png"),
+            displayName = "persisted.png",
+        )
+        val selectionStore = FakeInputImageSelectionStore(
+            initialSelections = PersistedInputImageSelections(
+                imageMode = restoredSelection,
+                videoMode = null,
+            )
+        )
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig().copy(imageInputNodeId = "10")),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = selectionStore,
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(restoredSelection.uri, viewModel.uiState.value.selectedInputImageUri)
+        assertEquals(restoredSelection.displayName, viewModel.uiState.value.selectedInputImageDisplayName)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `clear only removes current mode selection`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val imageSelection = PersistedInputImageSelection(
+            uri = Uri.parse("file:///persisted/image.png"),
+            displayName = "image.png",
+        )
+        val videoSelection = PersistedInputImageSelection(
+            uri = Uri.parse("file:///persisted/video.png"),
+            displayName = "video.png",
+        )
+        val selectionStore = FakeInputImageSelectionStore(
+            initialSelections = PersistedInputImageSelections(
+                imageMode = imageSelection,
+                videoMode = videoSelection,
+            )
+        )
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfig().copy(
+                    imageInputNodeId = "10",
+                    videoImageInputNodeId = "13",
+                )
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = selectionStore,
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(videoSelection.uri, viewModel.uiState.value.selectedInputImageUri)
+
+        viewModel.onClearInputImage()
+        advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.selectedInputImageUri)
+        assertTrue(selectionStore.clearedModes.contains(GenerationMode.VIDEO))
+
+        viewModel.onGenerationModeChanged(GenerationMode.IMAGE)
+        advanceUntilIdle()
+        assertEquals(imageSelection.uri, viewModel.uiState.value.selectedInputImageUri)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `different image selections are remembered per mode`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(
+                validConfig().copy(
+                    imageInputNodeId = "10",
+                    videoImageInputNodeId = "13",
+                )
+            ),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            mediaSaver = FakeMediaSaver(),
+        )
+
+        advanceUntilIdle()
+        val imageModeUri = Uri.parse("content://media/image_mode")
+        val videoModeUri = Uri.parse("content://media/video_mode")
+        viewModel.onInputImageSelected(imageModeUri, "image_mode.png")
+        advanceUntilIdle()
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        viewModel.onInputImageSelected(videoModeUri, "video_mode.png")
+        advanceUntilIdle()
+
+        viewModel.onGenerationModeChanged(GenerationMode.IMAGE)
+        advanceUntilIdle()
+        assertEquals(imageModeUri, viewModel.uiState.value.selectedInputImageUri)
+
+        viewModel.onGenerationModeChanged(GenerationMode.VIDEO)
+        advanceUntilIdle()
+        assertEquals(videoModeUri, viewModel.uiState.value.selectedInputImageUri)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `selection remains available when persistence fails and emits message`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val selectionStore = FakeInputImageSelectionStore(
+            persistResultProvider = { _, _, _ ->
+                Result.failure(IllegalStateException("disk full"))
+            }
+        )
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig().copy(imageInputNodeId = "10")),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(GenerationState.Idle)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = selectionStore,
+            mediaSaver = FakeMediaSaver(),
+        )
+        val messages = mutableListOf<String>()
+        val collectJob = launch { viewModel.messages.collect { messages.add(it) } }
+
+        advanceUntilIdle()
+        val selectedUri = Uri.parse("content://media/session_only")
+        viewModel.onInputImageSelected(selectedUri, "session_only.png")
+        advanceUntilIdle()
+
+        assertEquals(selectedUri, viewModel.uiState.value.selectedInputImageUri)
+        assertTrue(messages.any { it.contains("could not be persisted") })
+        collectJob.cancel()
         Dispatchers.resetMain()
     }
 
@@ -406,6 +600,53 @@ class GenerateViewModelTest {
         ): Result<String> {
             uploadCallCount += 1
             return result
+        }
+    }
+
+    private class FakeInputImageSelectionStore(
+        initialSelections: PersistedInputImageSelections = PersistedInputImageSelections(
+            imageMode = null,
+            videoMode = null,
+        ),
+        private val persistResultProvider: (
+            mode: GenerationMode,
+            sourceUri: Uri,
+            displayName: String,
+        ) -> Result<PersistedInputImageSelection> = { _, sourceUri, displayName ->
+            Result.success(
+                PersistedInputImageSelection(
+                    uri = sourceUri,
+                    displayName = displayName,
+                )
+            )
+        },
+    ) : InputImageSelectionStore {
+        private var selections = initialSelections
+        val clearedModes = mutableListOf<GenerationMode>()
+
+        override suspend fun loadSelections(): PersistedInputImageSelections = selections
+
+        override suspend fun persistSelection(
+            mode: GenerationMode,
+            sourceUri: Uri,
+            displayName: String,
+        ): Result<PersistedInputImageSelection> {
+            val result = persistResultProvider(mode, sourceUri, displayName)
+            result.onSuccess { persistedSelection ->
+                selections = when (mode) {
+                    GenerationMode.IMAGE -> selections.copy(imageMode = persistedSelection)
+                    GenerationMode.VIDEO -> selections.copy(videoMode = persistedSelection)
+                }
+            }
+            return result
+        }
+
+        override suspend fun clearSelection(mode: GenerationMode) {
+            clearedModes += mode
+            selections = when (mode) {
+                GenerationMode.IMAGE -> selections.copy(imageMode = null)
+                GenerationMode.VIDEO -> selections.copy(videoMode = null)
+            }
         }
     }
 

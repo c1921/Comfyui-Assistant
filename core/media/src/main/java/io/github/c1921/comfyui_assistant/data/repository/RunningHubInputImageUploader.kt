@@ -31,6 +31,7 @@ class RunningHubInputImageUploader(
                 ?.trim()
                 ?.lowercase(Locale.ROOT)
                 .orEmpty()
+                .ifBlank { resolveMimeTypeFromUri(imageUri) }
                 .ifBlank { "image/jpeg" }
             if (!mimeType.startsWith("image/")) {
                 throw IllegalArgumentException("Only image files are supported.")
@@ -88,6 +89,25 @@ class RunningHubInputImageUploader(
     }
 
     private fun authHeader(apiKey: String): String = "Bearer ${apiKey.trim()}"
+
+    private fun resolveMimeTypeFromUri(imageUri: Uri): String {
+        val extension = imageUri.lastPathSegment
+            ?.substringAfterLast('.', "")
+            ?.trim()
+            ?.lowercase(Locale.ROOT)
+            .orEmpty()
+        return when (extension) {
+            "jpg",
+            "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            "bmp" -> "image/bmp"
+            "heic" -> "image/heic"
+            "heif" -> "image/heif"
+            else -> ""
+        }
+    }
 
     private fun mapUploadException(error: Throwable): String {
         return when (error) {

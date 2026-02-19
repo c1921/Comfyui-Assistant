@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
             configDraftStore = appContainer.configDraftStore,
             generationRepository = appContainer.generationRepository,
             inputImageUploader = appContainer.inputImageUploader,
+            inputImageSelectionStore = appContainer.inputImageSelectionStore,
             mediaSaver = appContainer.mediaSaver,
         )
     }

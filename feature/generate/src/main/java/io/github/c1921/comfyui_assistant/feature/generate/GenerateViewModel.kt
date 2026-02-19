@@ -8,7 +8,9 @@ import io.github.c1921.comfyui_assistant.data.decoder.fallbackOrNull
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
 import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
+import io.github.c1921.comfyui_assistant.data.repository.InputImageSelectionStore
 import io.github.c1921.comfyui_assistant.data.repository.MediaSaver
+import io.github.c1921.comfyui_assistant.data.repository.PersistedInputImageSelection
 import io.github.c1921.comfyui_assistant.domain.ConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
@@ -32,6 +34,7 @@ class GenerateViewModel(
     private val configDraftStore: ConfigDraftStore,
     private val generationRepository: GenerationRepository,
     private val inputImageUploader: InputImageUploader,
+    private val inputImageSelectionStore: InputImageSelectionStore,
     private val mediaSaver: MediaSaver,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GenerateUiState())
@@ -43,10 +46,13 @@ class GenerateViewModel(
     private var generationJob: Job? = null
     private var lastSubmittedInput: GenerationInput? = null
     private val notifiedDecodeFallbackUrls = mutableSetOf<String>()
+    private var imageModeSelection: PersistedInputImageSelection? = null
+    private var videoModeSelection: PersistedInputImageSelection? = null
 
     init {
         observeConfigDraft()
         loadPersistedConfig()
+        loadPersistedInputSelections()
     }
 
     fun onPromptChanged(value: String) {
@@ -67,18 +73,8 @@ class GenerateViewModel(
 
     fun onGenerationModeChanged(value: GenerationMode) {
         _uiState.update { state ->
-            if (
-                state.selectedInputImageUri != null &&
-                !WorkflowConfigValidator.hasInputImageMapping(state.config, value)
-            ) {
-                state.copy(
-                    selectedMode = value,
-                    selectedInputImageUri = null,
-                    selectedInputImageDisplayName = "",
-                )
-            } else {
-                state.copy(selectedMode = value)
-            }
+            val updatedState = state.copy(selectedMode = value)
+            updatedState.copyWithVisibleInputImage(resolveVisibleInputImage(updatedState))
         }
     }
 
@@ -86,20 +82,55 @@ class GenerateViewModel(
         uri: Uri?,
         displayName: String,
     ) {
-        _uiState.update {
-            it.copy(
-                selectedInputImageUri = uri,
-                selectedInputImageDisplayName = displayName,
-            )
+        val selectedMode = _uiState.value.selectedMode
+        if (uri == null) {
+            onClearInputImage()
+            return
+        }
+
+        val normalizedDisplayName = displayName.trim().ifBlank {
+            uri.lastPathSegment?.substringAfterLast('/').orEmpty().ifBlank { uri.toString() }
+        }
+        setModeSelection(
+            mode = selectedMode,
+            selection = PersistedInputImageSelection(
+                uri = uri,
+                displayName = normalizedDisplayName,
+            ),
+        )
+        refreshVisibleInputImage()
+
+        viewModelScope.launch {
+            val persistResult = try {
+                inputImageSelectionStore.persistSelection(
+                    mode = selectedMode,
+                    sourceUri = uri,
+                    displayName = normalizedDisplayName,
+                )
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+            persistResult.onSuccess { persistedSelection ->
+                setModeSelection(selectedMode, persistedSelection)
+                refreshVisibleInputImage()
+            }.onFailure { error ->
+                val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
+                emitMessage("Selected image could not be persisted: $reason")
+            }
         }
     }
 
     fun onClearInputImage() {
-        _uiState.update {
-            it.copy(
-                selectedInputImageUri = null,
-                selectedInputImageDisplayName = "",
-            )
+        val selectedMode = _uiState.value.selectedMode
+        setModeSelection(selectedMode, null)
+        refreshVisibleInputImage()
+        viewModelScope.launch {
+            runCatching {
+                inputImageSelectionStore.clearSelection(selectedMode)
+            }.onFailure { error ->
+                val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
+                emitMessage("Selected image cleanup failed: $reason")
+            }
         }
     }
 
@@ -227,16 +258,65 @@ class GenerateViewModel(
         viewModelScope.launch {
             configDraftStore.draft.collectLatest { config ->
                 _uiState.update { state ->
-                    val shouldClearInputImage = state.selectedInputImageUri != null &&
-                        !WorkflowConfigValidator.hasInputImageMapping(config, state.selectedMode)
-                    state.copy(
-                        config = config,
-                        selectedInputImageUri = if (shouldClearInputImage) null else state.selectedInputImageUri,
-                        selectedInputImageDisplayName = if (shouldClearInputImage) "" else state.selectedInputImageDisplayName,
-                    )
+                    val updatedState = state.copy(config = config)
+                    updatedState.copyWithVisibleInputImage(resolveVisibleInputImage(updatedState))
                 }
             }
         }
+    }
+
+    private fun loadPersistedInputSelections() {
+        viewModelScope.launch {
+            val persistedSelections = runCatching {
+                inputImageSelectionStore.loadSelections()
+            }.getOrElse { error ->
+                val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
+                emitMessage("Failed to load persisted input image: $reason")
+                return@launch
+            }
+            imageModeSelection = persistedSelections.imageMode
+            videoModeSelection = persistedSelections.videoMode
+            refreshVisibleInputImage()
+        }
+    }
+
+    private fun setModeSelection(
+        mode: GenerationMode,
+        selection: PersistedInputImageSelection?,
+    ) {
+        when (mode) {
+            GenerationMode.IMAGE -> imageModeSelection = selection
+            GenerationMode.VIDEO -> videoModeSelection = selection
+        }
+    }
+
+    private fun getModeSelection(mode: GenerationMode): PersistedInputImageSelection? {
+        return when (mode) {
+            GenerationMode.IMAGE -> imageModeSelection
+            GenerationMode.VIDEO -> videoModeSelection
+        }
+    }
+
+    private fun resolveVisibleInputImage(state: GenerateUiState): PersistedInputImageSelection? {
+        if (!WorkflowConfigValidator.hasInputImageMapping(state.config, state.selectedMode)) {
+            return null
+        }
+        return getModeSelection(state.selectedMode)
+    }
+
+    private fun refreshVisibleInputImage() {
+        _uiState.update { state ->
+            state.copyWithVisibleInputImage(resolveVisibleInputImage(state))
+        }
+    }
+
+    private fun GenerateUiState.copyWithVisibleInputImage(
+        selection: PersistedInputImageSelection?,
+    ): GenerateUiState {
+        return copy(
+            selectedInputImageUri = selection?.uri,
+            selectedInputImageDisplayName = selection?.displayName.orEmpty(),
+        )
     }
 
     private fun executeGeneration(input: GenerationInput) {
@@ -288,6 +368,7 @@ class GenerateViewModel(
         private val configDraftStore: ConfigDraftStore,
         private val generationRepository: GenerationRepository,
         private val inputImageUploader: InputImageUploader,
+        private val inputImageSelectionStore: InputImageSelectionStore,
         private val mediaSaver: MediaSaver,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -297,6 +378,7 @@ class GenerateViewModel(
                 configDraftStore = configDraftStore,
                 generationRepository = generationRepository,
                 inputImageUploader = inputImageUploader,
+                inputImageSelectionStore = inputImageSelectionStore,
                 mediaSaver = mediaSaver,
             ) as T
         }
