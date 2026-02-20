@@ -18,7 +18,15 @@
     <string name="settings_video_length_node_id_label">Video length nodeId (optional)</string>
     <string name="settings_decode_password_label">Decode password (optional)</string>
     <string name="settings_decode_password_placeholder">Used for SS_tools encrypted image/video decode</string>
+    <string name="settings_webdav_section_title">WebDAV sync</string>
+    <string name="settings_webdav_enable_label">Enable WebDAV config sync</string>
+    <string name="settings_webdav_server_url_label">WebDAV server URL</string>
+    <string name="settings_webdav_server_url_placeholder">Example: https://dav.example.com/remote.php/dav/files/user</string>
+    <string name="settings_webdav_username_label">WebDAV username</string>
+    <string name="settings_webdav_password_label">WebDAV password</string>
+    <string name="settings_webdav_passphrase_label">Sync passphrase (for backup encryption)</string>
     <string name="settings_save_button">Save config</string>
     <string name="settings_clear_api_key_button">Clear API key</string>
     <string name="settings_help_text">Image and video share one API key. nodeId and fieldName can be found in exported workflow API JSON. Video mapping requires workflowId, prompt nodeId and prompt fieldName together. Image size mapping uses fixed fieldName: width and height on the same node. Image upload mapping uses fixed fieldName: image. Video length mapping uses fixed fieldName: value.</string>
+    <string name="settings_webdav_help_text">WebDAV sync stores encrypted config backup (with API key) at: /Comfyui-Assistant/config.v1.enc.json. Backup excludes WebDAV credentials and only syncs business config fields.</string>
 </resources>

@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +38,11 @@ fun SettingsScreen(
     onVideoImageInputNodeIdChanged: (String) -> Unit,
     onVideoLengthNodeIdChanged: (String) -> Unit,
     onDecodePasswordChanged: (String) -> Unit,
+    onWebDavEnabledChanged: (Boolean) -> Unit,
+    onWebDavServerUrlChanged: (String) -> Unit,
+    onWebDavUsernameChanged: (String) -> Unit,
+    onWebDavPasswordChanged: (String) -> Unit,
+    onWebDavSyncPassphraseChanged: (String) -> Unit,
     onSaveSettings: () -> Unit,
     onClearApiKey: () -> Unit,
 ) {
@@ -144,6 +150,52 @@ fun SettingsScreen(
             visualTransformation = PasswordVisualTransformation(),
         )
 
+        Text(stringResource(R.string.settings_webdav_section_title))
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_webdav_enable_label),
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = state.webDavEnabled,
+                onCheckedChange = onWebDavEnabledChanged,
+            )
+        }
+        OutlinedTextField(
+            value = state.webDavServerUrl,
+            onValueChange = onWebDavServerUrlChanged,
+            label = { Text(stringResource(R.string.settings_webdav_server_url_label)) },
+            placeholder = { Text(stringResource(R.string.settings_webdav_server_url_placeholder)) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.webDavEnabled,
+        )
+        OutlinedTextField(
+            value = state.webDavUsername,
+            onValueChange = onWebDavUsernameChanged,
+            label = { Text(stringResource(R.string.settings_webdav_username_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.webDavEnabled,
+        )
+        OutlinedTextField(
+            value = state.webDavPassword,
+            onValueChange = onWebDavPasswordChanged,
+            label = { Text(stringResource(R.string.settings_webdav_password_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.webDavEnabled,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        OutlinedTextField(
+            value = state.webDavSyncPassphrase,
+            onValueChange = onWebDavSyncPassphraseChanged,
+            label = { Text(stringResource(R.string.settings_webdav_passphrase_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.webDavEnabled,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth(),
@@ -164,5 +216,6 @@ fun SettingsScreen(
             }
         }
         Text(stringResource(R.string.settings_help_text))
+        Text(stringResource(R.string.settings_webdav_help_text))
     }
 }

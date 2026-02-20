@@ -4,7 +4,11 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncResult
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncTrigger
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
+import io.github.c1921.comfyui_assistant.data.local.NoOpWebDavSyncRepository
+import io.github.c1921.comfyui_assistant.data.local.WebDavSyncRepository
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
 import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
 import io.github.c1921.comfyui_assistant.data.repository.InputImageUploader
@@ -38,6 +42,7 @@ class GenerateViewModel(
     private val inputImageUploader: InputImageUploader,
     private val inputImageSelectionStore: InputImageSelectionStore,
     private val internalAlbumRepository: InternalAlbumRepository,
+    private val webDavSyncRepository: WebDavSyncRepository = NoOpWebDavSyncRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GenerateUiState())
     val uiState: StateFlow<GenerateUiState> = _uiState.asStateFlow()
@@ -366,6 +371,18 @@ class GenerateViewModel(
                             } else {
                                 emitMessage("Saved internally: ${result.successCount}/${result.totalOutputs}")
                             }
+                            when (val syncResult = webDavSyncRepository.syncConfig(ConfigSyncTrigger.AFTER_ARCHIVE)) {
+                                is ConfigSyncResult.Skipped -> Unit
+                                is ConfigSyncResult.Pushed -> emitMessage("WebDAV sync: configuration pushed.")
+                                is ConfigSyncResult.Pulled -> {
+                                    configDraftStore.update { syncResult.config }
+                                    emitMessage("WebDAV sync: newer remote configuration applied.")
+                                }
+
+                                is ConfigSyncResult.Failed -> {
+                                    emitMessage("WebDAV sync failed: ${syncResult.message}")
+                                }
+                            }
                         }.onFailure { error ->
                             val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
                             emitMessage("Internal save failed: $reason")
@@ -450,6 +467,7 @@ class GenerateViewModel(
         private val inputImageUploader: InputImageUploader,
         private val inputImageSelectionStore: InputImageSelectionStore,
         private val internalAlbumRepository: InternalAlbumRepository,
+        private val webDavSyncRepository: WebDavSyncRepository = NoOpWebDavSyncRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -460,6 +478,7 @@ class GenerateViewModel(
                 inputImageUploader = inputImageUploader,
                 inputImageSelectionStore = inputImageSelectionStore,
                 internalAlbumRepository = internalAlbumRepository,
+                webDavSyncRepository = webDavSyncRepository,
             ) as T
         }
     }

@@ -18,6 +18,11 @@ data class SettingsUiState(
     val videoImageInputNodeId: String = "",
     val videoLengthNodeId: String = "",
     val decodePassword: String = "",
+    val webDavEnabled: Boolean = false,
+    val webDavServerUrl: String = "",
+    val webDavUsername: String = "",
+    val webDavPassword: String = "",
+    val webDavSyncPassphrase: String = "",
 ) {
     fun toWorkflowConfig(): WorkflowConfig {
         return WorkflowConfig(
@@ -35,6 +40,11 @@ data class SettingsUiState(
             videoImageInputNodeId = videoImageInputNodeId,
             videoLengthNodeId = videoLengthNodeId,
             decodePassword = decodePassword,
+            webDavEnabled = webDavEnabled,
+            webDavServerUrl = webDavServerUrl,
+            webDavUsername = webDavUsername,
+            webDavPassword = webDavPassword,
+            webDavSyncPassphrase = webDavSyncPassphrase,
         )
     }
 }

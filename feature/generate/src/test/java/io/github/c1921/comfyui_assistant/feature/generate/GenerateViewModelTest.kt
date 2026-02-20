@@ -2,6 +2,9 @@ package io.github.c1921.comfyui_assistant.feature.generate
 
 import android.net.Uri
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncResult
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncTrigger
+import io.github.c1921.comfyui_assistant.data.local.WebDavSyncRepository
 import io.github.c1921.comfyui_assistant.data.repository.GenerationRepository
 import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
 import io.github.c1921.comfyui_assistant.data.repository.InputImageSelectionStore
@@ -17,6 +20,7 @@ import io.github.c1921.comfyui_assistant.domain.GenerationInput
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.GenerationRequestSnapshot
 import io.github.c1921.comfyui_assistant.domain.GenerationState
+import io.github.c1921.comfyui_assistant.domain.GeneratedOutput
 import io.github.c1921.comfyui_assistant.domain.ImageAspectPreset
 import io.github.c1921.comfyui_assistant.domain.InMemoryConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
@@ -756,6 +760,84 @@ class GenerateViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `generation success triggers WebDAV sync after archive`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val successState = GenerationState.Success(
+            taskId = "task-webdav-sync-1",
+            results = listOf(
+                GeneratedOutput(
+                    fileUrl = "https://example.com/output.png",
+                    fileType = "png",
+                    nodeId = "9",
+                ),
+            ),
+            promptTipsNodeErrors = null,
+        )
+        val syncRepository = FakeWebDavSyncRepository(
+            resultProvider = { ConfigSyncResult.Pushed(remotePath = "https://dav.example.com/Comfyui-Assistant/config.v1.enc.json") },
+        )
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(successState)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+            webDavSyncRepository = syncRepository,
+        )
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("sync me")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertEquals(listOf(ConfigSyncTrigger.AFTER_ARCHIVE), syncRepository.triggers)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `WebDAV sync failure does not break generation success state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val successState = GenerationState.Success(
+            taskId = "task-webdav-sync-2",
+            results = listOf(
+                GeneratedOutput(
+                    fileUrl = "https://example.com/output.png",
+                    fileType = "png",
+                    nodeId = "9",
+                ),
+            ),
+            promptTipsNodeErrors = null,
+        )
+        val syncRepository = FakeWebDavSyncRepository(
+            resultProvider = { ConfigSyncResult.Failed(message = "network timeout") },
+        )
+        val viewModel = GenerateViewModel(
+            configRepository = FakeConfigRepository(validConfig()),
+            configDraftStore = InMemoryConfigDraftStore(),
+            generationRepository = FakeGenerationRepository(flowOf(successState)),
+            inputImageUploader = FakeInputImageUploader(),
+            inputImageSelectionStore = FakeInputImageSelectionStore(),
+            internalAlbumRepository = FakeInternalAlbumRepository(),
+            webDavSyncRepository = syncRepository,
+        )
+        val messages = mutableListOf<String>()
+        val collectJob = launch { viewModel.messages.collect { messages += it } }
+
+        advanceUntilIdle()
+        viewModel.onPromptChanged("sync failure")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.generationState is GenerationState.Success)
+        assertTrue(messages.any { it.contains("WebDAV sync failed: network timeout") })
+        collectJob.cancel()
+        Dispatchers.resetMain()
+    }
+
     private fun validConfig(): WorkflowConfig {
         return WorkflowConfig(
             apiKey = "key",
@@ -915,6 +997,19 @@ class GenerateViewModelTest {
 
         override suspend fun findFirstMediaKey(taskId: String): Result<AlbumMediaKey?> {
             return Result.success(null)
+        }
+    }
+
+    private class FakeWebDavSyncRepository(
+        private val resultProvider: (ConfigSyncTrigger) -> ConfigSyncResult = {
+            ConfigSyncResult.Skipped(reason = "disabled")
+        },
+    ) : WebDavSyncRepository {
+        val triggers = mutableListOf<ConfigSyncTrigger>()
+
+        override suspend fun syncConfig(trigger: ConfigSyncTrigger): ConfigSyncResult {
+            triggers += trigger
+            return resultProvider(trigger)
         }
     }
 }

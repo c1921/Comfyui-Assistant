@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
             inputImageUploader = appContainer.inputImageUploader,
             inputImageSelectionStore = appContainer.inputImageSelectionStore,
             internalAlbumRepository = appContainer.internalAlbumRepository,
+            webDavSyncRepository = appContainer.webDavSyncRepository,
         )
     }
 
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
         SettingsViewModel.Factory(
             configRepository = appContainer.configRepository,
             configDraftStore = appContainer.configDraftStore,
+            webDavSyncRepository = appContainer.webDavSyncRepository,
         )
     }
 
@@ -99,6 +101,11 @@ class MainActivity : ComponentActivity() {
                     onVideoImageInputNodeIdChanged = settingsViewModel::onVideoImageInputNodeIdChanged,
                     onVideoLengthNodeIdChanged = settingsViewModel::onVideoLengthNodeIdChanged,
                     onDecodePasswordChanged = settingsViewModel::onDecodePasswordChanged,
+                    onWebDavEnabledChanged = settingsViewModel::onWebDavEnabledChanged,
+                    onWebDavServerUrlChanged = settingsViewModel::onWebDavServerUrlChanged,
+                    onWebDavUsernameChanged = settingsViewModel::onWebDavUsernameChanged,
+                    onWebDavPasswordChanged = settingsViewModel::onWebDavPasswordChanged,
+                    onWebDavSyncPassphraseChanged = settingsViewModel::onWebDavSyncPassphraseChanged,
                     onSaveSettings = settingsViewModel::saveSettings,
                     onClearApiKey = settingsViewModel::clearApiKey,
                     imageLoader = appContainer.imageLoader,

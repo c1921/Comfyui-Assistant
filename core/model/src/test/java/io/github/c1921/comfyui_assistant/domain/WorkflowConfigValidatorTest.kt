@@ -91,6 +91,36 @@ class WorkflowConfigValidatorTest {
     }
 
     @Test
+    fun `validateForSettings fails when WebDAV enabled but required fields missing`() {
+        val config = validConfig().copy(
+            webDavEnabled = true,
+            webDavServerUrl = "",
+            webDavUsername = "user",
+            webDavPassword = "pwd",
+            webDavSyncPassphrase = "passphrase",
+        )
+
+        val error = WorkflowConfigValidator.validateForSettings(config)
+
+        assertEquals("WebDAV server URL is required when sync is enabled.", error)
+    }
+
+    @Test
+    fun `validateForSettings allows empty WebDAV fields when sync is disabled`() {
+        val config = validConfig().copy(
+            webDavEnabled = false,
+            webDavServerUrl = "",
+            webDavUsername = "",
+            webDavPassword = "",
+            webDavSyncPassphrase = "",
+        )
+
+        val error = WorkflowConfigValidator.validateForSettings(config)
+
+        assertNull(error)
+    }
+
+    @Test
     fun `validateForGenerate fails for video mode when video mapping is missing`() {
         val config = validConfig()
 

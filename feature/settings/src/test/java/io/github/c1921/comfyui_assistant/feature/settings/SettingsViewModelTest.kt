@@ -1,10 +1,15 @@
 package io.github.c1921.comfyui_assistant.feature.settings
 
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncResult
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncTrigger
+import io.github.c1921.comfyui_assistant.data.local.WebDavSyncRepository
 import io.github.c1921.comfyui_assistant.domain.InMemoryConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -168,6 +173,86 @@ class SettingsViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `saveSettings triggers WebDAV sync after local save`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val syncRepository = FakeWebDavSyncRepository(
+            resultProvider = { ConfigSyncResult.Pushed(remotePath = "https://example.com/config.v1.enc.json") },
+        )
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+            webDavSyncRepository = syncRepository,
+        )
+
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertEquals(listOf(ConfigSyncTrigger.SETTINGS_SAVE), syncRepository.triggers)
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `saveSettings still succeeds when WebDAV sync fails`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val syncRepository = FakeWebDavSyncRepository(
+            resultProvider = { ConfigSyncResult.Failed(message = "timeout") },
+        )
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+            webDavSyncRepository = syncRepository,
+        )
+        val messages = mutableListOf<String>()
+        val collectJob = launch { viewModel.messages.collect { messages += it } }
+
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertTrue(repository.saveCalled)
+        assertTrue(messages.any { it.contains("Configuration saved.") })
+        assertTrue(messages.any { it.contains("WebDAV sync failed: timeout") })
+        collectJob.cancel()
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `saveSettings applies pulled config from WebDAV sync`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val repository = FakeConfigRepository()
+        val remoteConfig = WorkflowConfig(
+            workflowId = "remote-workflow",
+            promptNodeId = "22",
+            promptFieldName = "text",
+        )
+        val syncRepository = FakeWebDavSyncRepository(
+            resultProvider = { ConfigSyncResult.Pulled(config = remoteConfig) },
+        )
+        val viewModel = SettingsViewModel(
+            configRepository = repository,
+            configDraftStore = InMemoryConfigDraftStore(),
+            webDavSyncRepository = syncRepository,
+        )
+
+        advanceUntilIdle()
+        viewModel.onWorkflowIdChanged("local-workflow")
+        advanceUntilIdle()
+        viewModel.saveSettings()
+        advanceUntilIdle()
+
+        assertEquals("remote-workflow", viewModel.uiState.value.workflowId)
+        assertEquals("22", viewModel.uiState.value.promptNodeId)
+        Dispatchers.resetMain()
+    }
+
     private class FakeConfigRepository(
         initialConfig: WorkflowConfig = WorkflowConfig(),
     ) : ConfigRepository {
@@ -186,6 +271,19 @@ class SettingsViewModelTest {
         override suspend fun clearApiKey() {
             clearCalled = true
             currentConfig = currentConfig.copy(apiKey = "")
+        }
+    }
+
+    private class FakeWebDavSyncRepository(
+        private val resultProvider: (ConfigSyncTrigger) -> ConfigSyncResult = {
+            ConfigSyncResult.Skipped(reason = "disabled")
+        },
+    ) : WebDavSyncRepository {
+        val triggers = mutableListOf<ConfigSyncTrigger>()
+
+        override suspend fun syncConfig(trigger: ConfigSyncTrigger): ConfigSyncResult {
+            triggers += trigger
+            return resultProvider(trigger)
         }
     }
 }

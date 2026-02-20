@@ -5,6 +5,7 @@ import coil.ImageLoader
 import coil.decode.VideoFrameDecoder
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.local.SecureConfigStore
+import io.github.c1921.comfyui_assistant.data.local.WebDavSyncRepository
 import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckAutoDecodeDecoder
 import io.github.c1921.comfyui_assistant.data.network.RunningHubApiClient
 import io.github.c1921.comfyui_assistant.data.repository.DuckPreviewMediaResolver
@@ -28,7 +29,9 @@ class AppContainer(
     private val okHttpClient = RunningHubApiClient.createOkHttpClient()
     private val apiService = RunningHubApiClient.createService(okHttpClient)
 
-    val configRepository: ConfigRepository = SecureConfigStore(context)
+    private val secureConfigStore = SecureConfigStore(context)
+    val configRepository: ConfigRepository = secureConfigStore
+    val webDavSyncRepository: WebDavSyncRepository = secureConfigStore
     val configDraftStore: ConfigDraftStore = InMemoryConfigDraftStore()
     val generationRepository: GenerationRepository = RunningHubGenerationRepository(apiService)
     val inputImageUploader: InputImageUploader = RunningHubInputImageUploader(context, apiService)

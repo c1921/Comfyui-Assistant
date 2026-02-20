@@ -17,6 +17,11 @@ data class WorkflowConfig(
     val videoImageInputNodeId: String = "",
     val videoLengthNodeId: String = "",
     val decodePassword: String = "",
+    val webDavEnabled: Boolean = false,
+    val webDavServerUrl: String = "",
+    val webDavUsername: String = "",
+    val webDavPassword: String = "",
+    val webDavSyncPassphrase: String = "",
 )
 
 enum class GenerationMode {

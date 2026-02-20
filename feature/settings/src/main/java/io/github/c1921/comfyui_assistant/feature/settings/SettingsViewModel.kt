@@ -3,7 +3,11 @@ package io.github.c1921.comfyui_assistant.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncResult
+import io.github.c1921.comfyui_assistant.data.local.ConfigSyncTrigger
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
+import io.github.c1921.comfyui_assistant.data.local.NoOpWebDavSyncRepository
+import io.github.c1921.comfyui_assistant.data.local.WebDavSyncRepository
 import io.github.c1921.comfyui_assistant.domain.ConfigDraftStore
 import io.github.c1921.comfyui_assistant.domain.WorkflowConfigValidator
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -19,6 +23,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val configRepository: ConfigRepository,
     private val configDraftStore: ConfigDraftStore,
+    private val webDavSyncRepository: WebDavSyncRepository = NoOpWebDavSyncRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -87,6 +92,26 @@ class SettingsViewModel(
         configDraftStore.update { it.copy(decodePassword = value) }
     }
 
+    fun onWebDavEnabledChanged(value: Boolean) {
+        configDraftStore.update { it.copy(webDavEnabled = value) }
+    }
+
+    fun onWebDavServerUrlChanged(value: String) {
+        configDraftStore.update { it.copy(webDavServerUrl = value) }
+    }
+
+    fun onWebDavUsernameChanged(value: String) {
+        configDraftStore.update { it.copy(webDavUsername = value) }
+    }
+
+    fun onWebDavPasswordChanged(value: String) {
+        configDraftStore.update { it.copy(webDavPassword = value) }
+    }
+
+    fun onWebDavSyncPassphraseChanged(value: String) {
+        configDraftStore.update { it.copy(webDavSyncPassphrase = value) }
+    }
+
     fun saveSettings() {
         val current = _uiState.value
         val config = current.toWorkflowConfig()
@@ -98,6 +123,26 @@ class SettingsViewModel(
         viewModelScope.launch {
             configRepository.saveConfig(config)
             emitMessage("Configuration saved.")
+            when (val syncResult = webDavSyncRepository.syncConfig(ConfigSyncTrigger.SETTINGS_SAVE)) {
+                is ConfigSyncResult.Skipped -> {
+                    if (syncResult.reason.contains("already in sync")) {
+                        emitMessage("WebDAV sync: already up to date.")
+                    }
+                }
+
+                is ConfigSyncResult.Pushed -> {
+                    emitMessage("WebDAV sync: configuration pushed.")
+                }
+
+                is ConfigSyncResult.Pulled -> {
+                    configDraftStore.update { syncResult.config }
+                    emitMessage("WebDAV sync: newer remote configuration applied.")
+                }
+
+                is ConfigSyncResult.Failed -> {
+                    emitMessage("WebDAV sync failed: ${syncResult.message}")
+                }
+            }
         }
     }
 
@@ -136,6 +181,11 @@ class SettingsViewModel(
                         videoImageInputNodeId = config.videoImageInputNodeId,
                         videoLengthNodeId = config.videoLengthNodeId,
                         decodePassword = config.decodePassword,
+                        webDavEnabled = config.webDavEnabled,
+                        webDavServerUrl = config.webDavServerUrl,
+                        webDavUsername = config.webDavUsername,
+                        webDavPassword = config.webDavPassword,
+                        webDavSyncPassphrase = config.webDavSyncPassphrase,
                     )
                 }
             }
@@ -151,12 +201,14 @@ class SettingsViewModel(
     class Factory(
         private val configRepository: ConfigRepository,
         private val configDraftStore: ConfigDraftStore,
+        private val webDavSyncRepository: WebDavSyncRepository = NoOpWebDavSyncRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return SettingsViewModel(
                 configRepository = configRepository,
                 configDraftStore = configDraftStore,
+                webDavSyncRepository = webDavSyncRepository,
             ) as T
         }
     }

@@ -22,6 +22,14 @@ object WorkflowConfigValidator {
         if (hasAnyVideoMapping && !hasCompleteVideoMapping) {
             return "Video mapping requires workflowId, prompt nodeId and prompt fieldName."
         }
+        if (config.webDavEnabled) {
+            if (config.webDavServerUrl.isBlank()) return "WebDAV server URL is required when sync is enabled."
+            if (config.webDavUsername.isBlank()) return "WebDAV username is required when sync is enabled."
+            if (config.webDavPassword.isBlank()) return "WebDAV password is required when sync is enabled."
+            if (config.webDavSyncPassphrase.isBlank()) {
+                return "WebDAV sync passphrase is required when sync is enabled."
+            }
+        }
         return null
     }
 
