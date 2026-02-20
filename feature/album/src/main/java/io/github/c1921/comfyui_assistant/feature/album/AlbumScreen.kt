@@ -1,13 +1,9 @@
 package io.github.c1921.comfyui_assistant.feature.album
 
-import android.graphics.Bitmap
-import android.media.ThumbnailUtils
 import android.net.Uri
-import android.util.Size
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -64,7 +60,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -73,7 +68,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.videoFrameMillis
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaItem
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaSummary
@@ -81,8 +79,9 @@ import io.github.c1921.comfyui_assistant.domain.AlbumTaskDetail
 import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -99,9 +98,15 @@ private enum class AlbumSortOrder {
     OLDEST_FIRST,
 }
 
+private data class MediaCounts(
+    val imageCount: Int = 0,
+    val videoCount: Int = 0,
+)
+
 @Composable
 fun AlbumScreen(
     state: AlbumUiState,
+    imageLoader: ImageLoader,
     onOpenMedia: (AlbumMediaKey) -> Unit,
     onBackToList: () -> Unit,
     onRetryLoadMedia: () -> Unit,
@@ -123,6 +128,18 @@ fun AlbumScreen(
             sortOrder = sortOrder,
         )
     }
+    val mediaCounts = remember(state.mediaList) {
+        var imageCount = 0
+        var videoCount = 0
+        state.mediaList.forEach { media ->
+            when (media.savedMediaKind) {
+                OutputMediaKind.IMAGE -> imageCount += 1
+                OutputMediaKind.VIDEO -> videoCount += 1
+                else -> Unit
+            }
+        }
+        MediaCounts(imageCount = imageCount, videoCount = videoCount)
+    }
     val defaultNavigationList = remember(state.mediaList) {
         state.mediaList.sortedWith(mediaSummaryComparator(AlbumSortOrder.NEWEST_FIRST))
     }
@@ -137,9 +154,10 @@ fun AlbumScreen(
     if (state.selectedMediaKey == null) {
         AlbumMediaGridContent(
             mediaList = visibleMediaList,
+            imageLoader = imageLoader,
             totalCount = state.mediaList.size,
-            imageCount = state.mediaList.count { it.savedMediaKind == OutputMediaKind.IMAGE },
-            videoCount = state.mediaList.count { it.savedMediaKind == OutputMediaKind.VIDEO },
+            imageCount = mediaCounts.imageCount,
+            videoCount = mediaCounts.videoCount,
             selectedFilter = selectedFilter,
             onFilterSelected = { filter -> selectedFilterName = filter.name },
             sortOrder = sortOrder,
@@ -156,6 +174,7 @@ fun AlbumScreen(
     }
     AlbumMediaDetailContent(
         state = state,
+        imageLoader = imageLoader,
         navigationMediaList = navigationMediaList,
         onOpenMedia = onOpenMedia,
         onBackToList = onBackToList,
@@ -168,6 +187,7 @@ fun AlbumScreen(
 @Composable
 private fun AlbumMediaGridContent(
     mediaList: List<AlbumMediaSummary>,
+    imageLoader: ImageLoader,
     totalCount: Int,
     imageCount: Int,
     videoCount: Int,
@@ -268,7 +288,8 @@ private fun AlbumMediaGridContent(
             ) {
                 items(
                     items = mediaList,
-                    key = { "${it.key.taskId}_${it.key.index}" },
+                    // Lazy layouts use saveable state restoration; keys must be Bundle-saveable on Android.
+                    key = { it.localRelativePath },
                 ) { media ->
                     val localFile = remember(media.localRelativePath) {
                         File(albumRoot, media.localRelativePath)
@@ -286,11 +307,13 @@ private fun AlbumMediaGridContent(
                                 !localFile.exists() -> MissingMediaPlaceholder()
                                 media.savedMediaKind == OutputMediaKind.VIDEO -> VideoThumbnail(
                                     file = localFile,
+                                    imageLoader = imageLoader,
                                     modifier = Modifier.fillMaxSize(),
                                 )
 
                                 else -> AsyncImage(
-                                    model = Uri.fromFile(localFile),
+                                    model = localFile,
+                                    imageLoader = imageLoader,
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
@@ -349,6 +372,7 @@ private fun AlbumMediaGridContent(
 @Composable
 private fun AlbumMediaDetailContent(
     state: AlbumUiState,
+    imageLoader: ImageLoader,
     navigationMediaList: List<AlbumMediaSummary>,
     onOpenMedia: (AlbumMediaKey) -> Unit,
     onBackToList: () -> Unit,
@@ -431,6 +455,7 @@ private fun AlbumMediaDetailContent(
                 AlbumDetailPage(
                     summary = summary,
                     localFile = localFile,
+                    imageLoader = imageLoader,
                     selectedKey = selectedKey,
                     isLoadingDetail = state.isLoadingDetail,
                     detailError = state.detailError,
@@ -521,6 +546,7 @@ private fun AlbumMediaDetailContent(
 private fun AlbumDetailPage(
     summary: AlbumMediaSummary,
     localFile: File,
+    imageLoader: ImageLoader,
     selectedKey: AlbumMediaKey?,
     isLoadingDetail: Boolean,
     detailError: String?,
@@ -577,6 +603,7 @@ private fun AlbumDetailPage(
 
             else -> ZoomableImage(
                 imageUri = Uri.fromFile(localFile),
+                imageLoader = imageLoader,
                 modifier = Modifier
                     .fillMaxSize()
                     .let { base ->
@@ -695,6 +722,7 @@ private fun MetadataSheetContent(
 @Composable
 private fun ZoomableImage(
     imageUri: Uri,
+    imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
     onZoomedStateChanged: (Boolean) -> Unit,
 ) {
@@ -736,6 +764,7 @@ private fun ZoomableImage(
     ) {
         AsyncImage(
             model = imageUri,
+            imageLoader = imageLoader,
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier
@@ -769,31 +798,26 @@ private fun MissingMediaPlaceholder() {
 @Composable
 private fun VideoThumbnail(
     file: File,
+    imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
 ) {
-    val bitmap: Bitmap? = remember(file.absolutePath) {
-        runCatching {
-            ThumbnailUtils.createVideoThumbnail(file, Size(512, 512), null)
-        }.getOrNull()
+    val context = LocalContext.current
+    val request = remember(file.absolutePath) {
+        ImageRequest.Builder(context)
+            .data(file)
+            .videoFrameMillis(0)
+            .crossfade(false)
+            .build()
     }
-    if (bitmap != null) {
-        Image(
-            bitmap = bitmap.asImageBitmap(),
+    Box(modifier = modifier) {
+        MissingMediaPlaceholder()
+        AsyncImage(
+            model = request,
+            imageLoader = imageLoader,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = modifier,
+            modifier = Modifier.fillMaxSize(),
         )
-    } else {
-        Box(
-            modifier = modifier.background(Color.Black),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "VIDEO",
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
     }
 }
 
@@ -839,9 +863,13 @@ private fun mediaSummaryComparator(sortOrder: AlbumSortOrder): Comparator<AlbumM
 }
 
 private fun formatTimestamp(epochMs: Long): String {
-    return try {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(epochMs))
-    } catch (_: Exception) {
+    return runCatching {
+        TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(epochMs))
+    }.getOrElse {
         epochMs.toString()
     }
 }
+
+private val TIMESTAMP_FORMATTER: DateTimeFormatter = DateTimeFormatter
+    .ofPattern("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    .withZone(ZoneId.systemDefault())

@@ -9,15 +9,17 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
+import coil.ImageLoader
 import io.github.c1921.comfyui_assistant.domain.AlbumDecodeOutcomeCode
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaItem
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
@@ -35,6 +37,10 @@ class AlbumScreenInstrumentedTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private val imageLoader: ImageLoader by lazy {
+        ImageLoader.Builder(ApplicationProvider.getApplicationContext()).build()
+    }
+
     @Test
     fun mediaGrid_rendersItemsAndVideoBadge() {
         val state = AlbumUiState(
@@ -47,6 +53,7 @@ class AlbumScreenInstrumentedTest {
         composeRule.setContent {
             AlbumScreen(
                 state = state,
+                imageLoader = imageLoader,
                 onOpenMedia = {},
                 onBackToList = {},
                 onRetryLoadMedia = {},
@@ -85,6 +92,7 @@ class AlbumScreenInstrumentedTest {
             var uiState by remember { mutableStateOf(state) }
             AlbumScreen(
                 state = uiState,
+                imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
                 onBackToList = {},
                 onRetryLoadMedia = {},
@@ -127,6 +135,7 @@ class AlbumScreenInstrumentedTest {
         composeRule.setContent {
             AlbumScreen(
                 state = state,
+                imageLoader = imageLoader,
                 onOpenMedia = {},
                 onBackToList = {},
                 onRetryLoadMedia = {},
@@ -173,6 +182,7 @@ class AlbumScreenInstrumentedTest {
             var uiState by remember { mutableStateOf(initialState) }
             AlbumScreen(
                 state = uiState,
+                imageLoader = imageLoader,
                 onOpenMedia = { key ->
                     openedKeys += key
                     uiState = uiState.copy(
@@ -223,6 +233,7 @@ class AlbumScreenInstrumentedTest {
             var uiState by remember { mutableStateOf(initialState) }
             AlbumScreen(
                 state = uiState,
+                imageLoader = imageLoader,
                 onOpenMedia = { key ->
                     openCalls += 1
                     uiState = uiState.copy(selectedMediaKey = key)
@@ -270,6 +281,7 @@ class AlbumScreenInstrumentedTest {
             var uiState by remember { mutableStateOf(state) }
             AlbumScreen(
                 state = uiState,
+                imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
                 onBackToList = {},
                 onRetryLoadMedia = {},
@@ -318,6 +330,7 @@ class AlbumScreenInstrumentedTest {
             var uiState by remember { mutableStateOf(state) }
             AlbumScreen(
                 state = uiState,
+                imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
                 onBackToList = {},
                 onRetryLoadMedia = {},
@@ -330,6 +343,34 @@ class AlbumScreenInstrumentedTest {
 
         composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE).performTouchInput { swipeUp() }
         composeRule.onAllNodesWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).assertCountEquals(0)
+    }
+
+    @Test
+    fun mediaGrid_largeMixedList_scrollAndOpenItem_staysInteractive() {
+        val mediaList = (1..60).map { index ->
+            val kind = if (index % 3 == 0) OutputMediaKind.VIDEO else OutputMediaKind.IMAGE
+            mediaSummary(taskId = "task-large", index = index, kind = kind)
+        }
+        var openedKey: AlbumMediaKey? = null
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = AlbumUiState(mediaList = mediaList),
+                imageLoader = imageLoader,
+                onOpenMedia = { key -> openedKey = key },
+                onBackToList = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_MEDIA_GRID).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_MEDIA_GRID).performScrollToIndex(59)
+        composeRule.onAllNodesWithTag(UiTestTags.ALBUM_MEDIA_ITEM).onFirst().performClick()
+        composeRule.runOnIdle {
+            assertEquals(true, openedKey != null)
+        }
     }
 
     private fun mediaSummary(

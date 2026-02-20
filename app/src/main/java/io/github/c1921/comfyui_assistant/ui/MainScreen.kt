@@ -143,6 +143,7 @@ fun MainScreen(
 
                 MainTab.Album -> AlbumScreen(
                     state = albumState,
+                    imageLoader = imageLoader,
                     onOpenMedia = onOpenAlbumMedia,
                     onBackToList = onBackFromAlbumDetail,
                     onRetryLoadMedia = onRetryLoadAlbumMedia,

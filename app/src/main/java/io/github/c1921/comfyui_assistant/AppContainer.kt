@@ -2,6 +2,7 @@ package io.github.c1921.comfyui_assistant
 
 import android.content.Context
 import coil.ImageLoader
+import coil.decode.VideoFrameDecoder
 import io.github.c1921.comfyui_assistant.data.local.ConfigRepository
 import io.github.c1921.comfyui_assistant.data.local.SecureConfigStore
 import io.github.c1921.comfyui_assistant.data.decoder.coil.DuckAutoDecodeDecoder
@@ -39,6 +40,7 @@ class AppContainer(
         .okHttpClient(okHttpClient)
         .components {
             add(DuckAutoDecodeDecoder.Factory())
+            add(VideoFrameDecoder.Factory())
         }
         .build()
 }
