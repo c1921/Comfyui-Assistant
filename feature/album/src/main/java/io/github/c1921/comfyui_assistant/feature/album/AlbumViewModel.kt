@@ -37,14 +37,30 @@ class AlbumViewModel(
     }
 
     fun openMedia(key: AlbumMediaKey) {
-        val taskId = key.taskId.trim()
-        if (taskId.isBlank() || key.index <= 0) {
+        val normalizedKey = normalizeMediaKey(key)
+        if (normalizedKey == null) {
             emitMessage("Invalid media target.")
+            return
+        }
+        val cachedMedia = _uiState.value.selectedTaskDetail
+            ?.takeIf { it.taskId == normalizedKey.taskId }
+            ?.mediaItems
+            ?.firstOrNull { it.index == normalizedKey.index }
+        if (cachedMedia != null) {
+            _uiState.update {
+                it.copy(
+                    selectedMediaKey = normalizedKey,
+                    selectedMediaItem = cachedMedia,
+                    isLoadingDetail = false,
+                    detailError = null,
+                    isMetadataExpanded = false,
+                )
+            }
             return
         }
         _uiState.update {
             it.copy(
-                selectedMediaKey = AlbumMediaKey(taskId = taskId, index = key.index),
+                selectedMediaKey = normalizedKey,
                 selectedTaskDetail = null,
                 selectedMediaItem = null,
                 isLoadingDetail = true,
@@ -52,7 +68,7 @@ class AlbumViewModel(
                 isMetadataExpanded = false,
             )
         }
-        loadDetailForMedia(AlbumMediaKey(taskId = taskId, index = key.index))
+        loadDetailForMedia(normalizedKey)
     }
 
     fun backToList() {
@@ -156,6 +172,14 @@ class AlbumViewModel(
         viewModelScope.launch {
             _messages.emit(message)
         }
+    }
+
+    private fun normalizeMediaKey(key: AlbumMediaKey): AlbumMediaKey? {
+        val taskId = key.taskId.trim()
+        if (taskId.isBlank() || key.index <= 0) {
+            return null
+        }
+        return AlbumMediaKey(taskId = taskId, index = key.index)
     }
 
     class Factory(

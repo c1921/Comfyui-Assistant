@@ -1,11 +1,22 @@
 <resources>
     <string name="album_title">Internal album</string>
     <string name="album_empty">No archived media yet.</string>
+    <string name="album_summary_counts">Total %1$d   Images %2$d   Videos %3$d</string>
+    <string name="album_filter_all_with_count">All (%1$d)</string>
+    <string name="album_filter_images_with_count">Images (%1$d)</string>
+    <string name="album_filter_videos_with_count">Videos (%1$d)</string>
+    <string name="album_sort_newest">Newest first</string>
+    <string name="album_sort_oldest">Oldest first</string>
     <string name="album_video_badge">VIDEO</string>
     <string name="album_back_to_list">Back to list</string>
+    <string name="album_prev">Previous</string>
+    <string name="album_next">Next</string>
+    <string name="album_detail_position">%1$d / %2$d</string>
     <string name="album_retry_load">Retry</string>
     <string name="album_detail_error">Failed to load task: %1$s</string>
     <string name="album_media_missing">Local file is missing.</string>
+    <string name="album_metadata_title">Task metadata</string>
+    <string name="album_metadata_unavailable">Metadata unavailable.</string>
     <string name="album_metadata_show">Metadata</string>
     <string name="album_metadata_hide">Hide metadata</string>
     <string name="album_task_id_value">taskId: %1$s</string>

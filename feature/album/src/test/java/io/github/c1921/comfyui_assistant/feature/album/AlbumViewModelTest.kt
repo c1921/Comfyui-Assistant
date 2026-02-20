@@ -94,6 +94,55 @@ class AlbumViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `openMedia reuses loaded task detail for same task`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val detail = detail(
+            taskId = "task-cache",
+            mediaItems = listOf(
+                mediaItem(index = 1, kind = OutputMediaKind.IMAGE),
+                mediaItem(index = 2, kind = OutputMediaKind.IMAGE),
+            ),
+        )
+        val repository = FakeInternalAlbumRepository(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-cache", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-cache", index = 2, kind = OutputMediaKind.IMAGE),
+            ),
+            detailByTaskId = mapOf("task-cache" to detail),
+        )
+        val viewModel = AlbumViewModel(repository)
+
+        viewModel.openMedia(AlbumMediaKey("task-cache", 1))
+        advanceUntilIdle()
+        assertEquals(1, repository.loadTaskDetailCallCount)
+
+        viewModel.openMedia(AlbumMediaKey("task-cache", 2))
+        advanceUntilIdle()
+
+        assertEquals(1, repository.loadTaskDetailCallCount)
+        assertEquals(2, viewModel.uiState.value.selectedMediaItem?.index)
+        Dispatchers.resetMain()
+    }
+
+    private fun mediaSummary(
+        taskId: String,
+        index: Int,
+        kind: OutputMediaKind,
+    ): AlbumMediaSummary {
+        return AlbumMediaSummary(
+            key = AlbumMediaKey(taskId = taskId, index = index),
+            createdAtEpochMs = 2000L + index,
+            savedAtEpochMs = 1000L,
+            savedMediaKind = kind,
+            localRelativePath = "tasks/$taskId/out_$index.${if (kind == OutputMediaKind.VIDEO) "mp4" else "jpg"}",
+            mimeType = if (kind == OutputMediaKind.VIDEO) "video/mp4" else "image/jpeg",
+            workflowId = "wf",
+            prompt = "prompt",
+        )
+    }
+
     private fun mediaItem(
         index: Int,
         kind: OutputMediaKind,
@@ -148,6 +197,8 @@ class AlbumViewModelTest {
     ) : InternalAlbumRepository {
         private val taskSummariesFlow = MutableStateFlow<List<AlbumTaskSummary>>(emptyList())
         private val mediaSummariesFlow = MutableStateFlow(mediaList)
+        var loadTaskDetailCallCount: Int = 0
+            private set
 
         override suspend fun archiveGeneration(
             requestSnapshot: GenerationRequestSnapshot,
@@ -170,6 +221,7 @@ class AlbumViewModelTest {
         override fun observeMediaSummaries(): Flow<List<AlbumMediaSummary>> = mediaSummariesFlow
 
         override suspend fun loadTaskDetail(taskId: String): Result<AlbumTaskDetail> {
+            loadTaskDetailCallCount += 1
             val detail = detailByTaskId[taskId]
                 ?: return Result.failure(IllegalStateException("Task not found in fake repo"))
             return Result.success(detail)
