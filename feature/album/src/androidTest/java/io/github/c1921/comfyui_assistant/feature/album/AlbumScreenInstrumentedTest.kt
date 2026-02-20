@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
@@ -30,6 +31,10 @@ import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -65,6 +70,33 @@ class AlbumScreenInstrumentedTest {
 
         composeRule.onNodeWithTag(UiTestTags.ALBUM_MEDIA_GRID).assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.ALBUM_MEDIA_ITEM).assertCountEquals(2)
+    }
+
+    @Test
+    fun mediaGrid_hidesTimestampLabelForImageAndVideoItems() {
+        val imageMedia = mediaSummary(taskId = "task-grid-hide-ts-1", index = 1, kind = OutputMediaKind.IMAGE)
+        val videoMedia = mediaSummary(taskId = "task-grid-hide-ts-2", index = 2, kind = OutputMediaKind.VIDEO)
+        val formatter = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            .withZone(ZoneId.systemDefault())
+        val imageTimestamp = formatter.format(Instant.ofEpochMilli(imageMedia.createdAtEpochMs))
+        val videoTimestamp = formatter.format(Instant.ofEpochMilli(videoMedia.createdAtEpochMs))
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = AlbumUiState(mediaList = listOf(imageMedia, videoMedia)),
+                imageLoader = imageLoader,
+                onOpenMedia = {},
+                onDeleteMedia = { _, _ -> },
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_MEDIA_GRID).assertIsDisplayed()
+        composeRule.onAllNodesWithText(imageTimestamp).assertCountEquals(0)
+        composeRule.onAllNodesWithText(videoTimestamp).assertCountEquals(0)
     }
 
     @Test
