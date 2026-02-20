@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
                     onRetry = generateViewModel::retry,
                     onOpenAlbumForCurrentTask = generateViewModel::openLastArchivedTaskInAlbum,
                     onOpenAlbumMedia = albumViewModel::openMedia,
+                    onDeleteAlbumMedia = albumViewModel::deleteMedia,
                     onBackFromAlbumDetail = albumViewModel::backToList,
                     onRetryLoadAlbumMedia = albumViewModel::retryLoadSelectedMedia,
                     onToggleAlbumMetadataExpanded = albumViewModel::toggleMetadataExpanded,

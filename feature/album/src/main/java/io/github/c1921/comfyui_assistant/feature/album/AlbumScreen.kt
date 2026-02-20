@@ -6,6 +6,7 @@ import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -32,6 +33,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,17 +107,32 @@ private data class MediaCounts(
     val videoCount: Int = 0,
 )
 
+private enum class DeleteDialogSource {
+    LIST,
+    DETAIL,
+}
+
+private data class PendingDeleteDialog(
+    val source: DeleteDialogSource,
+    val keys: Set<AlbumMediaKey>,
+    val fallbackKey: AlbumMediaKey?,
+)
+
 @Composable
 fun AlbumScreen(
     state: AlbumUiState,
     imageLoader: ImageLoader,
     onOpenMedia: (AlbumMediaKey) -> Unit,
+    onDeleteMedia: (Set<AlbumMediaKey>, AlbumMediaKey?) -> Unit,
     onRetryLoadMedia: () -> Unit,
     onToggleMetadataExpanded: () -> Unit,
     onSendImageToVideoInput: (Uri, String) -> Unit,
 ) {
     var selectedFilterName by rememberSaveable { mutableStateOf(AlbumMediaFilter.ALL.name) }
     var sortOrderName by rememberSaveable { mutableStateOf(AlbumSortOrder.NEWEST_FIRST.name) }
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedKeys by remember { mutableStateOf(setOf<AlbumMediaKey>()) }
+    var pendingDeleteDialog by remember { mutableStateOf<PendingDeleteDialog?>(null) }
     val selectedFilter = remember(selectedFilterName) {
         AlbumMediaFilter.entries.firstOrNull { it.name == selectedFilterName } ?: AlbumMediaFilter.ALL
     }
@@ -151,6 +169,58 @@ fun AlbumScreen(
             defaultNavigationList
         }
     }
+
+    LaunchedEffect(state.mediaList, isSelectionMode, selectedKeys) {
+        if (!isSelectionMode) return@LaunchedEffect
+        val allKeys = state.mediaList.map { it.key }.toSet()
+        val pruned = selectedKeys.filter { it in allKeys }.toSet()
+        if (pruned != selectedKeys) {
+            selectedKeys = pruned
+        }
+        if (selectedKeys.isEmpty()) {
+            isSelectionMode = false
+        }
+    }
+
+    val pendingDialogState = pendingDeleteDialog
+    if (pendingDialogState != null) {
+        val keyCount = pendingDialogState.keys.size
+        val message = if (keyCount <= 1) {
+            stringResource(R.string.album_delete_dialog_message_single)
+        } else {
+            stringResource(R.string.album_delete_dialog_message_multiple, keyCount)
+        }
+        AlertDialog(
+            onDismissRequest = { pendingDeleteDialog = null },
+            title = { Text(stringResource(R.string.album_delete_dialog_title)) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteMedia(pendingDialogState.keys, pendingDialogState.fallbackKey)
+                        if (pendingDialogState.source == DeleteDialogSource.LIST) {
+                            isSelectionMode = false
+                            selectedKeys = emptySet()
+                        }
+                        pendingDeleteDialog = null
+                    },
+                    modifier = Modifier.testTag(UiTestTags.ALBUM_DELETE_CONFIRM_BUTTON),
+                ) {
+                    Text(stringResource(R.string.album_delete_dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingDeleteDialog = null },
+                    modifier = Modifier.testTag(UiTestTags.ALBUM_DELETE_CANCEL_BUTTON),
+                ) {
+                    Text(stringResource(R.string.album_delete_dialog_cancel))
+                }
+            },
+            modifier = Modifier.testTag(UiTestTags.ALBUM_DELETE_CONFIRM_DIALOG),
+        )
+    }
+
     if (state.selectedMediaKey == null) {
         AlbumMediaGridContent(
             mediaList = visibleMediaList,
@@ -168,7 +238,40 @@ fun AlbumScreen(
                     AlbumSortOrder.NEWEST_FIRST.name
                 }
             },
-            onOpenMedia = onOpenMedia,
+            isSelectionMode = isSelectionMode,
+            selectedKeys = selectedKeys,
+            isDeletingMedia = state.isDeletingMedia,
+            onOpenMedia = {
+                if (!isSelectionMode) {
+                    onOpenMedia(it)
+                }
+            },
+            onToggleSelected = { key ->
+                val updated = selectedKeys.toMutableSet().apply {
+                    if (!add(key)) remove(key)
+                }.toSet()
+                selectedKeys = updated
+                if (updated.isEmpty()) {
+                    isSelectionMode = false
+                }
+            },
+            onLongPressMedia = { key ->
+                isSelectionMode = true
+                selectedKeys = selectedKeys + key
+            },
+            onRequestDeleteSelected = {
+                if (selectedKeys.isNotEmpty()) {
+                    pendingDeleteDialog = PendingDeleteDialog(
+                        source = DeleteDialogSource.LIST,
+                        keys = selectedKeys,
+                        fallbackKey = null,
+                    )
+                }
+            },
+            onCancelSelection = {
+                isSelectionMode = false
+                selectedKeys = emptySet()
+            },
         )
         return
     }
@@ -177,12 +280,20 @@ fun AlbumScreen(
         imageLoader = imageLoader,
         navigationMediaList = navigationMediaList,
         onOpenMedia = onOpenMedia,
+        onDeleteMedia = { keys, fallback ->
+            pendingDeleteDialog = PendingDeleteDialog(
+                source = DeleteDialogSource.DETAIL,
+                keys = keys,
+                fallbackKey = fallback,
+            )
+        },
         onRetryLoadMedia = onRetryLoadMedia,
         onToggleMetadataExpanded = onToggleMetadataExpanded,
         onSendImageToVideoInput = onSendImageToVideoInput,
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlbumMediaGridContent(
     mediaList: List<AlbumMediaSummary>,
@@ -194,7 +305,14 @@ private fun AlbumMediaGridContent(
     onFilterSelected: (AlbumMediaFilter) -> Unit,
     sortOrder: AlbumSortOrder,
     onToggleSortOrder: () -> Unit,
+    isSelectionMode: Boolean,
+    selectedKeys: Set<AlbumMediaKey>,
+    isDeletingMedia: Boolean,
     onOpenMedia: (AlbumMediaKey) -> Unit,
+    onToggleSelected: (AlbumMediaKey) -> Unit,
+    onLongPressMedia: (AlbumMediaKey) -> Unit,
+    onRequestDeleteSelected: () -> Unit,
+    onCancelSelection: () -> Unit,
 ) {
     val context = LocalContext.current
     val albumRoot = remember(context.filesDir) { File(context.filesDir, "internal_album") }
@@ -216,44 +334,74 @@ private fun AlbumMediaGridContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FilterChip(
-                    selected = selectedFilter == AlbumMediaFilter.ALL,
-                    onClick = { onFilterSelected(AlbumMediaFilter.ALL) },
-                    label = {
-                        Text(stringResource(R.string.album_filter_all_with_count, totalCount))
-                    },
-                )
-                FilterChip(
-                    selected = selectedFilter == AlbumMediaFilter.IMAGES,
-                    onClick = { onFilterSelected(AlbumMediaFilter.IMAGES) },
-                    label = {
-                        Text(stringResource(R.string.album_filter_images_with_count, imageCount))
-                    },
-                )
-                FilterChip(
-                    selected = selectedFilter == AlbumMediaFilter.VIDEOS,
-                    onClick = { onFilterSelected(AlbumMediaFilter.VIDEOS) },
-                    label = {
-                        Text(stringResource(R.string.album_filter_videos_with_count, videoCount))
-                    },
-                )
-                FilledTonalButton(onClick = onToggleSortOrder) {
+            if (isSelectionMode) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.ALBUM_SELECTION_TOOLBAR),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = stringResource(
-                            if (sortOrder == AlbumSortOrder.NEWEST_FIRST) {
-                                R.string.album_sort_newest
-                            } else {
-                                R.string.album_sort_oldest
-                            },
-                        ),
+                        text = stringResource(R.string.album_selected_count, selectedKeys.size),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
                     )
+                    FilledTonalButton(
+                        onClick = onRequestDeleteSelected,
+                        enabled = selectedKeys.isNotEmpty() && !isDeletingMedia,
+                        modifier = Modifier.testTag(UiTestTags.ALBUM_BATCH_DELETE_BUTTON),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (isDeletingMedia) R.string.album_deleting else R.string.album_delete_button,
+                            ),
+                        )
+                    }
+                    TextButton(onClick = onCancelSelection) {
+                        Text(stringResource(R.string.album_cancel_selection))
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = selectedFilter == AlbumMediaFilter.ALL,
+                        onClick = { onFilterSelected(AlbumMediaFilter.ALL) },
+                        label = {
+                            Text(stringResource(R.string.album_filter_all_with_count, totalCount))
+                        },
+                    )
+                    FilterChip(
+                        selected = selectedFilter == AlbumMediaFilter.IMAGES,
+                        onClick = { onFilterSelected(AlbumMediaFilter.IMAGES) },
+                        label = {
+                            Text(stringResource(R.string.album_filter_images_with_count, imageCount))
+                        },
+                    )
+                    FilterChip(
+                        selected = selectedFilter == AlbumMediaFilter.VIDEOS,
+                        onClick = { onFilterSelected(AlbumMediaFilter.VIDEOS) },
+                        label = {
+                            Text(stringResource(R.string.album_filter_videos_with_count, videoCount))
+                        },
+                    )
+                    FilledTonalButton(onClick = onToggleSortOrder) {
+                        Text(
+                            text = stringResource(
+                                if (sortOrder == AlbumSortOrder.NEWEST_FIRST) {
+                                    R.string.album_sort_newest
+                                } else {
+                                    R.string.album_sort_oldest
+                                },
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -293,15 +441,28 @@ private fun AlbumMediaGridContent(
                     val localFile = remember(media.localRelativePath) {
                         File(albumRoot, media.localRelativePath)
                     }
+                    val isSelected = media.key in selectedKeys
                     Card(
-                        onClick = { onOpenMedia(media.key) },
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .testTag(UiTestTags.ALBUM_MEDIA_ITEM),
                     ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            onToggleSelected(media.key)
+                                        } else {
+                                            onOpenMedia(media.key)
+                                        }
+                                    },
+                                    onLongClick = { onLongPressMedia(media.key) },
+                                ),
+                        ) {
                             when {
                                 !localFile.exists() -> MissingMediaPlaceholder()
                                 media.savedMediaKind == OutputMediaKind.VIDEO -> VideoThumbnail(
@@ -359,6 +520,29 @@ private fun AlbumMediaGridContent(
                                     )
                                 }
                             }
+
+                            if (isSelectionMode && isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .background(Color.Black.copy(alpha = 0.35f)),
+                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(8.dp)
+                                        .testTag(UiTestTags.ALBUM_SELECTION_MARK),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.album_selected),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -374,6 +558,7 @@ private fun AlbumMediaDetailContent(
     imageLoader: ImageLoader,
     navigationMediaList: List<AlbumMediaSummary>,
     onOpenMedia: (AlbumMediaKey) -> Unit,
+    onDeleteMedia: (Set<AlbumMediaKey>, AlbumMediaKey?) -> Unit,
     onRetryLoadMedia: () -> Unit,
     onToggleMetadataExpanded: () -> Unit,
     onSendImageToVideoInput: (Uri, String) -> Unit,
@@ -425,6 +610,15 @@ private fun AlbumMediaDetailContent(
     }
 
     val currentSummary = navigationMediaList.getOrNull(pagerState.currentPage)
+    val currentMediaKey = currentSummary?.key
+    val fallbackKeyAfterDelete = remember(currentMediaKey, navigationMediaList) {
+        val index = navigationMediaList.indexOfFirst { it.key == currentMediaKey }
+        if (index < 0) {
+            null
+        } else {
+            navigationMediaList.getOrNull(index + 1)?.key ?: navigationMediaList.getOrNull(index - 1)?.key
+        }
+    }
     val currentFile = remember(currentSummary?.localRelativePath, context.filesDir) {
         currentSummary?.let { File(context.filesDir, "internal_album/${it.localRelativePath}") }
     }
@@ -526,7 +720,13 @@ private fun AlbumMediaDetailContent(
                 MetadataSheetContent(
                     detail = state.selectedTaskDetail,
                     selectedMedia = state.selectedMediaItem,
+                    currentMediaKey = currentMediaKey,
+                    fallbackKeyAfterDelete = fallbackKeyAfterDelete,
+                    isDeletingMedia = state.isDeletingMedia,
                     sendableImageFile = sendableImageFile,
+                    onDeleteCurrentMedia = { key, fallback ->
+                        onDeleteMedia(setOf(key), fallback)
+                    },
                     onSendImageToVideoInput = onSendImageToVideoInput,
                 )
             }
@@ -620,7 +820,11 @@ private fun AlbumDetailPage(
 private fun MetadataSheetContent(
     detail: AlbumTaskDetail?,
     selectedMedia: AlbumMediaItem?,
+    currentMediaKey: AlbumMediaKey?,
+    fallbackKeyAfterDelete: AlbumMediaKey?,
+    isDeletingMedia: Boolean,
     sendableImageFile: File?,
+    onDeleteCurrentMedia: (AlbumMediaKey, AlbumMediaKey?) -> Unit,
     onSendImageToVideoInput: (Uri, String) -> Unit,
 ) {
     Column(
@@ -645,6 +849,22 @@ private fun MetadataSheetContent(
                     .testTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON),
             ) {
                 Text(stringResource(R.string.album_send_to_video_input))
+            }
+        }
+
+        if (currentMediaKey != null) {
+            FilledTonalButton(
+                onClick = { onDeleteCurrentMedia(currentMediaKey, fallbackKeyAfterDelete) },
+                enabled = !isDeletingMedia,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.ALBUM_SINGLE_DELETE_BUTTON),
+            ) {
+                Text(
+                    stringResource(
+                        if (isDeletingMedia) R.string.album_deleting else R.string.album_delete_current_media,
+                    ),
+                )
             }
         }
 

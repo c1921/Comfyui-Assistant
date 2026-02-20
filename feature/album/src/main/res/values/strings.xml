@@ -35,4 +35,15 @@
     <string name="album_media_source_type_value">sourceType: %1$s</string>
     <string name="album_media_source_node_value">sourceNodeId: %1$s</string>
     <string name="album_send_to_video_input">Send to video input</string>
+    <string name="album_selected_count">Selected %1$d</string>
+    <string name="album_selected">Selected</string>
+    <string name="album_delete_button">Delete</string>
+    <string name="album_cancel_selection">Cancel</string>
+    <string name="album_delete_current_media">Delete current media</string>
+    <string name="album_delete_dialog_title">Delete media?</string>
+    <string name="album_delete_dialog_message_single">This action cannot be undone.</string>
+    <string name="album_delete_dialog_message_multiple">Delete %1$d selected media items? This action cannot be undone.</string>
+    <string name="album_delete_dialog_confirm">Delete</string>
+    <string name="album_delete_dialog_cancel">Cancel</string>
+    <string name="album_deleting">Deleting...</string>
 </resources>

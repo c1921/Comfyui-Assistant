@@ -13,4 +13,5 @@ data class AlbumUiState(
     val isLoadingDetail: Boolean = false,
     val detailError: String? = null,
     val isMetadataExpanded: Boolean = false,
+    val isDeletingMedia: Boolean = false,
 )

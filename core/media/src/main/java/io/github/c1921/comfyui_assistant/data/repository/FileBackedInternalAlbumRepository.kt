@@ -5,6 +5,7 @@ import io.github.c1921.comfyui_assistant.data.decoder.DuckDecodeFailureReason
 import io.github.c1921.comfyui_assistant.data.decoder.DuckMediaDecodeOutcome
 import io.github.c1921.comfyui_assistant.data.decoder.DuckPayloadDecoder
 import io.github.c1921.comfyui_assistant.domain.AlbumDecodeOutcomeCode
+import io.github.c1921.comfyui_assistant.domain.AlbumDeleteResult
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaItem
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaSummary
@@ -182,6 +183,101 @@ class FileBackedInternalAlbumRepository(
                 }
             }
         }
+    }
+
+    override suspend fun deleteMedia(keys: Set<AlbumMediaKey>): Result<AlbumDeleteResult> = withContext(ioDispatcher) {
+        val normalizedKeys = keys.mapNotNull(::normalizeMediaKey).toSet()
+        val requestedCount = keys.size
+        runCatching {
+            fileMutex.withLock {
+                ensureBaseDirectories()
+                deleteMediaLocked(
+                    normalizedKeys = normalizedKeys,
+                    requestedCount = requestedCount,
+                )
+            }
+        }.onFailure {
+            runCatching {
+                fileMutex.withLock {
+                    ensureBaseDirectories()
+                    val rebuilt = rebuildIndexFromTaskFiles()
+                    writeIndexLocked(rebuilt)
+                    publishIndexSnapshot(rebuilt)
+                }
+            }
+        }
+    }
+
+    private fun deleteMediaLocked(
+        normalizedKeys: Set<AlbumMediaKey>,
+        requestedCount: Int,
+    ): AlbumDeleteResult {
+        if (normalizedKeys.isEmpty()) {
+            return AlbumDeleteResult(
+                requestedCount = requestedCount,
+                deletedCount = 0,
+                missingCount = 0,
+                affectedTaskCount = 0,
+            )
+        }
+
+        var deletedCount = 0
+        var missingCount = 0
+        var affectedTaskCount = 0
+
+        normalizedKeys.groupBy { it.taskId }.forEach { (taskId, taskKeys) ->
+            val detail = loadTaskDetailLocked(taskId)
+            if (detail == null) {
+                missingCount += taskKeys.size
+                return@forEach
+            }
+
+            val indexesToDelete = taskKeys.map { it.index }.toSet()
+            val mediaByIndex = detail.mediaItems.associateBy { it.index }
+            val mediaToDelete = mutableListOf<AlbumMediaItem>()
+            indexesToDelete.forEach { index ->
+                val media = mediaByIndex[index]
+                if (media == null) {
+                    missingCount += 1
+                } else {
+                    mediaToDelete += media
+                }
+            }
+
+            if (mediaToDelete.isEmpty()) {
+                return@forEach
+            }
+
+            mediaToDelete.forEach { media ->
+                deleteFileIfExists(File(albumRootDir, media.localRelativePath))
+            }
+
+            val remainingMedia = detail.mediaItems.filterNot { it.index in indexesToDelete }
+            val taskDirectory = taskDirectoryFor(taskId)
+            if (remainingMedia.isEmpty()) {
+                deleteDirectoryRecursively(taskDirectory)
+            } else {
+                val updatedDetail = detail.copy(
+                    totalOutputs = remainingMedia.size + detail.failedCount,
+                    savedCount = remainingMedia.size,
+                    mediaItems = remainingMedia,
+                )
+                writeTaskDetailLocked(taskDirectory, updatedDetail)
+            }
+
+            affectedTaskCount += 1
+            deletedCount += mediaToDelete.size
+        }
+
+        val rebuilt = rebuildIndexFromTaskFiles()
+        writeIndexLocked(rebuilt)
+        publishIndexSnapshot(rebuilt)
+        return AlbumDeleteResult(
+            requestedCount = requestedCount,
+            deletedCount = deletedCount,
+            missingCount = missingCount,
+            affectedTaskCount = affectedTaskCount,
+        )
     }
 
     private fun archiveSingleOutput(
@@ -475,6 +571,29 @@ class FileBackedInternalAlbumRepository(
     private fun sanitizeTaskId(taskId: String): String {
         val sanitized = taskId.trim().replace(INVALID_TASK_DIR_CHAR_REGEX, "_")
         return sanitized.ifBlank { "unknown_task" }
+    }
+
+    private fun normalizeMediaKey(key: AlbumMediaKey): AlbumMediaKey? {
+        val taskId = key.taskId.trim()
+        if (taskId.isBlank() || key.index <= 0) {
+            return null
+        }
+        return AlbumMediaKey(taskId = taskId, index = key.index)
+    }
+
+    private fun deleteFileIfExists(target: File) {
+        if (target.exists() && !target.delete()) {
+            throw IllegalStateException("Unable to delete file: ${target.absolutePath}")
+        }
+    }
+
+    private fun deleteDirectoryRecursively(directory: File) {
+        if (!directory.exists()) {
+            return
+        }
+        if (!directory.deleteRecursively() && directory.exists()) {
+            throw IllegalStateException("Unable to delete directory: ${directory.absolutePath}")
+        }
     }
 
     private fun writeBytesAtomic(

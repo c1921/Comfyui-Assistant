@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
+import io.github.c1921.comfyui_assistant.domain.AlbumDeleteResult
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
 import io.github.c1921.comfyui_assistant.domain.AlbumOpenTarget
 import io.github.c1921.comfyui_assistant.domain.AlbumTaskDetail
@@ -108,10 +109,78 @@ class AlbumViewModel(
         _uiState.update { it.copy(isMetadataExpanded = !it.isMetadataExpanded) }
     }
 
+    fun deleteMedia(
+        keys: Set<AlbumMediaKey>,
+        fallbackKeyAfterDelete: AlbumMediaKey? = null,
+    ) {
+        if (_uiState.value.isDeletingMedia) {
+            return
+        }
+        val normalizedKeys = keys.mapNotNull(::normalizeMediaKey).toSet()
+        if (normalizedKeys.isEmpty()) {
+            emitMessage("No media selected for deletion.")
+            return
+        }
+        val normalizedFallback = fallbackKeyAfterDelete?.let(::normalizeMediaKey)
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDeletingMedia = true) }
+            internalAlbumRepository.deleteMedia(normalizedKeys)
+                .onSuccess { result ->
+                    val affectedTaskIds = normalizedKeys.map { it.taskId }.toSet()
+                    affectedTaskIds.forEach(taskDetailCache::remove)
+                    val selectedMediaKey = _uiState.value.selectedMediaKey
+                    val deletedCurrent = selectedMediaKey != null && selectedMediaKey in normalizedKeys
+                    if (deletedCurrent) {
+                        val fallback = normalizedFallback?.takeIf { it !in normalizedKeys }
+                        if (fallback != null) {
+                            openMedia(fallback)
+                        } else {
+                            backToList()
+                        }
+                    } else {
+                        val selectedTaskId = _uiState.value.selectedTaskDetail?.taskId
+                        if (selectedTaskId != null && selectedTaskId in affectedTaskIds) {
+                            if (selectedMediaKey != null && selectedMediaKey !in normalizedKeys) {
+                                openMedia(selectedMediaKey)
+                            } else {
+                                backToList()
+                            }
+                        }
+                    }
+                    emitMessage(buildDeleteSuccessMessage(result))
+                }
+                .onFailure { error ->
+                    val reason = error.message?.ifBlank { "unknown error." } ?: "unknown error."
+                    emitMessage("Failed to delete media: $reason")
+                }
+            _uiState.update { it.copy(isDeletingMedia = false) }
+        }
+    }
+
     private fun observeMediaSummaries() {
         viewModelScope.launch {
             internalAlbumRepository.observeMediaSummaries().collectLatest { media ->
-                _uiState.update { it.copy(mediaList = media) }
+                _uiState.update { state ->
+                    val selectedMediaKey = state.selectedMediaKey
+                    if (
+                        !state.isDeletingMedia &&
+                        media.isNotEmpty() &&
+                        selectedMediaKey != null &&
+                        media.none { it.key == selectedMediaKey }
+                    ) {
+                        state.copy(
+                            mediaList = media,
+                            selectedMediaKey = null,
+                            selectedTaskDetail = null,
+                            selectedMediaItem = null,
+                            isLoadingDetail = false,
+                            detailError = null,
+                            isMetadataExpanded = false,
+                        )
+                    } else {
+                        state.copy(mediaList = media)
+                    }
+                }
             }
         }
     }
@@ -192,6 +261,21 @@ class AlbumViewModel(
             return null
         }
         return AlbumMediaKey(taskId = taskId, index = key.index)
+    }
+
+    private fun buildDeleteSuccessMessage(result: AlbumDeleteResult): String {
+        if (result.deletedCount <= 0) {
+            return if (result.missingCount > 0) {
+                "No media deleted. ${result.missingCount} item(s) were missing."
+            } else {
+                "No media deleted."
+            }
+        }
+        return if (result.missingCount > 0) {
+            "Deleted ${result.deletedCount} media item(s). ${result.missingCount} item(s) were missing."
+        } else {
+            "Deleted ${result.deletedCount} media item(s)."
+        }
     }
 
     private companion object {

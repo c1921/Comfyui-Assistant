@@ -1,6 +1,7 @@
 package io.github.c1921.comfyui_assistant.data.repository
 
 import io.github.c1921.comfyui_assistant.domain.AlbumSaveResult
+import io.github.c1921.comfyui_assistant.domain.AlbumDeleteResult
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaSummary
 import io.github.c1921.comfyui_assistant.domain.AlbumTaskDetail
@@ -27,4 +28,8 @@ interface InternalAlbumRepository {
     suspend fun findFirstImageKey(taskId: String): Result<AlbumMediaKey?>
 
     suspend fun findFirstMediaKey(taskId: String): Result<AlbumMediaKey?>
+
+    suspend fun deleteMedia(keys: Set<AlbumMediaKey>): Result<AlbumDeleteResult> {
+        return Result.failure(UnsupportedOperationException("deleteMedia is not supported by this repository."))
+    }
 }

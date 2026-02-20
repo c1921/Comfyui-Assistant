@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
@@ -55,6 +56,7 @@ class AlbumScreenInstrumentedTest {
                 state = state,
                 imageLoader = imageLoader,
                 onOpenMedia = {},
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },
@@ -93,6 +95,7 @@ class AlbumScreenInstrumentedTest {
                 state = uiState,
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -124,6 +127,7 @@ class AlbumScreenInstrumentedTest {
                 state = state,
                 imageLoader = imageLoader,
                 onOpenMedia = {},
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },
@@ -150,6 +154,7 @@ class AlbumScreenInstrumentedTest {
                 state = state,
                 imageLoader = imageLoader,
                 onOpenMedia = {},
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },
@@ -187,6 +192,7 @@ class AlbumScreenInstrumentedTest {
                 state = state,
                 imageLoader = imageLoader,
                 onOpenMedia = {},
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },
@@ -239,6 +245,7 @@ class AlbumScreenInstrumentedTest {
                         selectedMediaItem = if (key.index == 1) item1 else item2,
                     )
                 },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -286,6 +293,7 @@ class AlbumScreenInstrumentedTest {
                         detailError = null,
                     )
                 },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -334,6 +342,7 @@ class AlbumScreenInstrumentedTest {
                     openCalls += 1
                     uiState = uiState.copy(selectedMediaKey = key)
                 },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -378,6 +387,7 @@ class AlbumScreenInstrumentedTest {
                 state = uiState,
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -426,6 +436,7 @@ class AlbumScreenInstrumentedTest {
                 state = uiState,
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -436,6 +447,135 @@ class AlbumScreenInstrumentedTest {
 
         composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE).performTouchInput { swipeUp() }
         composeRule.onAllNodesWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).assertCountEquals(0)
+    }
+
+    @Test
+    fun mediaGrid_longPress_entersSelectionMode() {
+        val state = AlbumUiState(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-select-1", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-select-2", index = 1, kind = OutputMediaKind.IMAGE),
+            ),
+        )
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = state,
+                imageLoader = imageLoader,
+                onOpenMedia = {},
+                onDeleteMedia = { _, _ -> },
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onAllNodesWithTag(UiTestTags.ALBUM_MEDIA_ITEM).onFirst().performTouchInput { longClick() }
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_SELECTION_TOOLBAR).assertIsDisplayed()
+        composeRule.onNodeWithText("Selected 1").assertIsDisplayed()
+    }
+
+    @Test
+    fun mediaGrid_multiSelect_deleteConfirm_invokesCallbackWithAllKeys() {
+        val keyA = AlbumMediaKey("task-batch-1", 1)
+        val keyB = AlbumMediaKey("task-batch-2", 1)
+        val state = AlbumUiState(
+            mediaList = listOf(
+                mediaSummary(taskId = keyA.taskId, index = keyA.index, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = keyB.taskId, index = keyB.index, kind = OutputMediaKind.IMAGE),
+            ),
+        )
+        var deletedKeys: Set<AlbumMediaKey>? = null
+        var fallbackKey: AlbumMediaKey? = AlbumMediaKey("placeholder", 99)
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = state,
+                imageLoader = imageLoader,
+                onOpenMedia = {},
+                onDeleteMedia = { keys, fallback ->
+                    deletedKeys = keys
+                    fallbackKey = fallback
+                },
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        val mediaNodes = composeRule.onAllNodesWithTag(UiTestTags.ALBUM_MEDIA_ITEM)
+        mediaNodes[0].performTouchInput { longClick() }
+        mediaNodes[1].performClick()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_BATCH_DELETE_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DELETE_CONFIRM_DIALOG).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DELETE_CONFIRM_BUTTON).performClick()
+        composeRule.runOnIdle {
+            assertEquals(setOf(keyA, keyB), deletedKeys)
+            assertEquals(null, fallbackKey)
+        }
+    }
+
+    @Test
+    fun metadataSheet_deleteCurrentMedia_confirm_invokesCallbackWithFallback() {
+        val media1Path = "tasks/task-delete-detail/out_1.jpg"
+        val media2Path = "tasks/task-delete-detail/out_2.jpg"
+        prepareInternalAlbumFile(media1Path)
+        prepareInternalAlbumFile(media2Path)
+        val item1 = mediaItem(
+            taskId = "task-delete-detail",
+            index = 1,
+            kind = OutputMediaKind.IMAGE,
+            localRelativePath = media1Path,
+        )
+        val item2 = mediaItem(
+            taskId = "task-delete-detail",
+            index = 2,
+            kind = OutputMediaKind.IMAGE,
+            localRelativePath = media2Path,
+        )
+        val detail = taskDetail(
+            taskId = "task-delete-detail",
+            mediaItems = listOf(item1, item2),
+        )
+        val state = AlbumUiState(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-delete-detail", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-delete-detail", index = 2, kind = OutputMediaKind.IMAGE),
+            ),
+            selectedMediaKey = AlbumMediaKey("task-delete-detail", 1),
+            selectedTaskDetail = detail,
+            selectedMediaItem = item1,
+            isMetadataExpanded = false,
+        )
+        var deletedKeys: Set<AlbumMediaKey>? = null
+        var fallback: AlbumMediaKey? = null
+
+        composeRule.setContent {
+            var uiState by remember { mutableStateOf(state) }
+            AlbumScreen(
+                state = uiState,
+                imageLoader = imageLoader,
+                onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
+                onDeleteMedia = { keys, key ->
+                    deletedKeys = keys
+                    fallback = key
+                },
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE).performTouchInput { swipeUp() }
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_SINGLE_DELETE_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_SINGLE_DELETE_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DELETE_CONFIRM_BUTTON).performClick()
+        composeRule.runOnIdle {
+            assertEquals(setOf(AlbumMediaKey("task-delete-detail", 1)), deletedKeys)
+            assertEquals(AlbumMediaKey("task-delete-detail", 2), fallback)
+        }
     }
 
     @Test
@@ -451,6 +591,7 @@ class AlbumScreenInstrumentedTest {
                 state = AlbumUiState(mediaList = mediaList),
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> openedKey = key },
+                onDeleteMedia = { _, _ -> },
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },

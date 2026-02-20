@@ -21,6 +21,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -460,6 +461,196 @@ class FileBackedInternalAlbumRepositoryTest {
         val mediaItems = indexJson.optJSONArray("media")
         assertEquals(1, taskItems?.length())
         assertEquals(detail.savedCount, mediaItems?.length())
+    }
+
+    @Test
+    fun `deleteMedia removes single media and rewrites task and index`() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        clearAlbumDirectory(context)
+        val firstUrl = "https://example.com/delete_single_1.png"
+        val secondUrl = "https://example.com/delete_single_2.png"
+        val repository = FileBackedInternalAlbumRepository(
+            context = context,
+            httpClient = fakeHttpClient(
+                urlToBody = mapOf(
+                    firstUrl to byteArrayOf(0x41, 0x42),
+                    secondUrl to byteArrayOf(0x43, 0x44),
+                ),
+            ),
+            decodeMediaIfCarrierImage = { _, _ ->
+                DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            },
+        )
+        repository.archiveGeneration(
+            requestSnapshot = imageRequestSnapshot(),
+            successState = GenerationState.Success(
+                taskId = "task-delete-single-1",
+                results = listOf(
+                    GeneratedOutput(fileUrl = firstUrl, fileType = "png", nodeId = "1"),
+                    GeneratedOutput(fileUrl = secondUrl, fileType = "png", nodeId = "2"),
+                ),
+                promptTipsNodeErrors = null,
+            ),
+            decodePassword = "",
+        ).getOrThrow()
+        val beforeDetail = repository.loadTaskDetail("task-delete-single-1").getOrThrow()
+        val deletedMedia = beforeDetail.mediaItems.first { it.index == 1 }
+        val deletedFile = File(context.filesDir, "internal_album/${deletedMedia.localRelativePath}")
+        assertTrue(deletedFile.exists())
+
+        val deleteResult = repository.deleteMedia(
+            keys = setOf(AlbumMediaKey(taskId = "task-delete-single-1", index = 1)),
+        ).getOrThrow()
+
+        assertEquals(1, deleteResult.deletedCount)
+        assertEquals(0, deleteResult.missingCount)
+        val afterDetail = repository.loadTaskDetail("task-delete-single-1").getOrThrow()
+        assertEquals(1, afterDetail.savedCount)
+        assertEquals(1, afterDetail.totalOutputs)
+        assertEquals(listOf(2), afterDetail.mediaItems.map { it.index })
+        assertFalse(deletedFile.exists())
+
+        val indexFile = File(context.filesDir, "internal_album/index.json")
+        val indexJson = JSONObject(indexFile.readText())
+        assertEquals(1, indexJson.optJSONArray("tasks")?.length())
+        assertEquals(1, indexJson.optJSONArray("media")?.length())
+    }
+
+    @Test
+    fun `deleteMedia removes task directory and index entry when last media is deleted`() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        clearAlbumDirectory(context)
+        val onlyUrl = "https://example.com/delete_last_only.png"
+        val repository = FileBackedInternalAlbumRepository(
+            context = context,
+            httpClient = fakeHttpClient(urlToBody = mapOf(onlyUrl to byteArrayOf(0x51, 0x52))),
+            decodeMediaIfCarrierImage = { _, _ ->
+                DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            },
+        )
+        repository.archiveGeneration(
+            requestSnapshot = imageRequestSnapshot(),
+            successState = GenerationState.Success(
+                taskId = "task-delete-last-1",
+                results = listOf(
+                    GeneratedOutput(fileUrl = onlyUrl, fileType = "png", nodeId = "1"),
+                ),
+                promptTipsNodeErrors = null,
+            ),
+            decodePassword = "",
+        ).getOrThrow()
+
+        val result = repository.deleteMedia(
+            keys = setOf(AlbumMediaKey(taskId = "task-delete-last-1", index = 1)),
+        ).getOrThrow()
+        assertEquals(1, result.deletedCount)
+        assertFalse(repository.hasTask("task-delete-last-1"))
+        val taskDirectory = File(context.filesDir, "internal_album/tasks/task-delete-last-1")
+        assertFalse(taskDirectory.exists())
+
+        val indexJson = JSONObject(File(context.filesDir, "internal_album/index.json").readText())
+        assertEquals(0, indexJson.optJSONArray("tasks")?.length())
+        assertEquals(0, indexJson.optJSONArray("media")?.length())
+    }
+
+    @Test
+    fun `deleteMedia batch across tasks keeps media flow and tasks consistent`() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        clearAlbumDirectory(context)
+        val a1 = "https://example.com/delete_batch_a1.png"
+        val a2 = "https://example.com/delete_batch_a2.png"
+        val b1 = "https://example.com/delete_batch_b1.png"
+        val repository = FileBackedInternalAlbumRepository(
+            context = context,
+            httpClient = fakeHttpClient(
+                urlToBody = mapOf(
+                    a1 to byteArrayOf(0x61),
+                    a2 to byteArrayOf(0x62),
+                    b1 to byteArrayOf(0x63),
+                ),
+            ),
+            decodeMediaIfCarrierImage = { _, _ ->
+                DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            },
+        )
+        repository.archiveGeneration(
+            requestSnapshot = imageRequestSnapshot(),
+            successState = GenerationState.Success(
+                taskId = "task-delete-batch-a",
+                results = listOf(
+                    GeneratedOutput(fileUrl = a1, fileType = "png", nodeId = "1"),
+                    GeneratedOutput(fileUrl = a2, fileType = "png", nodeId = "2"),
+                ),
+                promptTipsNodeErrors = null,
+            ),
+            decodePassword = "",
+        ).getOrThrow()
+        repository.archiveGeneration(
+            requestSnapshot = imageRequestSnapshot(),
+            successState = GenerationState.Success(
+                taskId = "task-delete-batch-b",
+                results = listOf(
+                    GeneratedOutput(fileUrl = b1, fileType = "png", nodeId = "1"),
+                ),
+                promptTipsNodeErrors = null,
+            ),
+            decodePassword = "",
+        ).getOrThrow()
+
+        val result = repository.deleteMedia(
+            keys = setOf(
+                AlbumMediaKey(taskId = "task-delete-batch-a", index = 1),
+                AlbumMediaKey(taskId = "task-delete-batch-b", index = 1),
+            ),
+        ).getOrThrow()
+        assertEquals(2, result.deletedCount)
+
+        val mediaSummaries = repository.observeMediaSummaries().first()
+        assertEquals(setOf(AlbumMediaKey(taskId = "task-delete-batch-a", index = 2)), mediaSummaries.map { it.key }.toSet())
+        assertTrue(repository.hasTask("task-delete-batch-a"))
+        assertFalse(repository.hasTask("task-delete-batch-b"))
+    }
+
+    @Test
+    fun `deleteMedia reports missing keys without corrupting existing data`() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        clearAlbumDirectory(context)
+        val existingUrl = "https://example.com/delete_missing_existing.png"
+        val repository = FileBackedInternalAlbumRepository(
+            context = context,
+            httpClient = fakeHttpClient(urlToBody = mapOf(existingUrl to byteArrayOf(0x71, 0x72))),
+            decodeMediaIfCarrierImage = { _, _ ->
+                DuckMediaDecodeOutcome.Fallback(DuckDecodeFailureReason.NotCarrierImage)
+            },
+        )
+        repository.archiveGeneration(
+            requestSnapshot = imageRequestSnapshot(),
+            successState = GenerationState.Success(
+                taskId = "task-delete-missing-1",
+                results = listOf(
+                    GeneratedOutput(fileUrl = existingUrl, fileType = "png", nodeId = "1"),
+                ),
+                promptTipsNodeErrors = null,
+            ),
+            decodePassword = "",
+        ).getOrThrow()
+
+        val result = repository.deleteMedia(
+            keys = setOf(
+                AlbumMediaKey(taskId = "task-delete-missing-1", index = 1),
+                AlbumMediaKey(taskId = "task-delete-missing-1", index = 99),
+                AlbumMediaKey(taskId = "task-delete-missing-unknown", index = 1),
+            ),
+        ).getOrThrow()
+
+        assertEquals(3, result.requestedCount)
+        assertEquals(1, result.deletedCount)
+        assertEquals(2, result.missingCount)
+        assertFalse(repository.hasTask("task-delete-missing-1"))
+        assertEquals(0, repository.observeMediaSummaries().first().size)
+        val indexJson = JSONObject(File(context.filesDir, "internal_album/index.json").readText())
+        assertEquals(0, indexJson.optJSONArray("tasks")?.length())
+        assertEquals(0, indexJson.optJSONArray("media")?.length())
     }
 
     private fun imageRequestSnapshot(): GenerationRequestSnapshot {

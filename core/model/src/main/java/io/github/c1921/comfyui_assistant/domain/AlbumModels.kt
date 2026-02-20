@@ -37,6 +37,13 @@ data class AlbumSaveResult(
     val failures: List<AlbumSaveFailureItem>,
 )
 
+data class AlbumDeleteResult(
+    val requestedCount: Int,
+    val deletedCount: Int,
+    val missingCount: Int,
+    val affectedTaskCount: Int,
+)
+
 enum class AlbumDecodeOutcomeCode {
     DECODED_IMAGE,
     DECODED_VIDEO,
