@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import io.github.c1921.comfyui_assistant.data.repository.InternalAlbumRepository
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
 import io.github.c1921.comfyui_assistant.domain.AlbumOpenTarget
+import io.github.c1921.comfyui_assistant.domain.AlbumTaskDetail
+import java.util.LinkedHashMap
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -24,6 +26,15 @@ class AlbumViewModel(
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private val taskDetailCache = object : LinkedHashMap<String, AlbumTaskDetail>(
+        DETAIL_CACHE_CAPACITY,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, AlbumTaskDetail>): Boolean {
+            return size > DETAIL_CACHE_CAPACITY
+        }
+    }
 
     init {
         observeMediaSummaries()
@@ -42,14 +53,14 @@ class AlbumViewModel(
             emitMessage("Invalid media target.")
             return
         }
-        val cachedMedia = _uiState.value.selectedTaskDetail
-            ?.takeIf { it.taskId == normalizedKey.taskId }
-            ?.mediaItems
-            ?.firstOrNull { it.index == normalizedKey.index }
-        if (cachedMedia != null) {
+        val cachedDetail = _uiState.value.selectedTaskDetail?.takeIf { it.taskId == normalizedKey.taskId }
+            ?: taskDetailCache[normalizedKey.taskId]
+        val cachedMedia = cachedDetail?.mediaItems?.firstOrNull { it.index == normalizedKey.index }
+        if (cachedDetail != null && cachedMedia != null) {
             _uiState.update {
                 it.copy(
                     selectedMediaKey = normalizedKey,
+                    selectedTaskDetail = cachedDetail,
                     selectedMediaItem = cachedMedia,
                     isLoadingDetail = false,
                     detailError = null,
@@ -126,6 +137,7 @@ class AlbumViewModel(
         viewModelScope.launch {
             internalAlbumRepository.loadTaskDetail(key.taskId)
                 .onSuccess { detail ->
+                    taskDetailCache[detail.taskId] = detail
                     val selectedMediaItem = detail.mediaItems.firstOrNull { it.index == key.index }
                     if (selectedMediaItem == null) {
                         val reason = "Media #${key.index} not found in task ${key.taskId}."
@@ -180,6 +192,10 @@ class AlbumViewModel(
             return null
         }
         return AlbumMediaKey(taskId = taskId, index = key.index)
+    }
+
+    private companion object {
+        const val DETAIL_CACHE_CAPACITY = 20
     }
 
     class Factory(

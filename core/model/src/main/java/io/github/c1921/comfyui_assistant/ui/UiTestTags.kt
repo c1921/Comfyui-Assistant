@@ -8,6 +8,7 @@ object UiTestTags {
     const val ALBUM_DETAIL_PAGER = "album_detail_pager"
     const val ALBUM_DETAIL_IMAGE = "album_detail_image"
     const val ALBUM_DETAIL_VIDEO = "album_detail_video"
+    const val ALBUM_DETAIL_ERROR_OVERLAY = "album_detail_error_overlay"
     const val ALBUM_METADATA_SWIPE_ZONE = "album_metadata_swipe_zone"
     const val ALBUM_METADATA_SHEET = "album_metadata_sheet"
     const val ALBUM_METADATA_PANEL = "album_metadata_panel"

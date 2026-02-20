@@ -1,5 +1,6 @@
 package io.github.c1921.comfyui_assistant.feature.album
 
+import android.content.Context
 import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
@@ -33,7 +34,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -403,6 +404,12 @@ private fun AlbumMediaDetailContent(
         snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
             .collect { page ->
+                prefetchNeighborImages(
+                    page = page,
+                    navigationMediaList = navigationMediaList,
+                    context = context,
+                    imageLoader = imageLoader,
+                )
                 val key = navigationMediaList.getOrNull(page)?.key ?: return@collect
                 if (key != latestSelectedKey) {
                     onOpenMedia(key)
@@ -440,6 +447,7 @@ private fun AlbumMediaDetailContent(
         } else {
             HorizontalPager(
                 state = pagerState,
+                beyondViewportPageCount = 1,
                 userScrollEnabled = !isCurrentImageZoomed,
                 modifier = Modifier
                     .fillMaxSize()
@@ -454,7 +462,6 @@ private fun AlbumMediaDetailContent(
                     localFile = localFile,
                     imageLoader = imageLoader,
                     selectedKey = selectedKey,
-                    isLoadingDetail = state.isLoadingDetail,
                     detailError = state.detailError,
                     onRetryLoadMedia = onRetryLoadMedia,
                     onZoomedStateChanged = if (page == pagerState.currentPage) {
@@ -533,7 +540,6 @@ private fun AlbumDetailPage(
     localFile: File,
     imageLoader: ImageLoader,
     selectedKey: AlbumMediaKey?,
-    isLoadingDetail: Boolean,
     detailError: String?,
     onRetryLoadMedia: () -> Unit,
     onZoomedStateChanged: (Boolean) -> Unit,
@@ -545,18 +551,6 @@ private fun AlbumDetailPage(
         contentAlignment = Alignment.Center,
     ) {
         when {
-            isSelectedPage && isLoadingDetail -> CircularProgressIndicator()
-
-            isSelectedPage && !detailError.isNullOrBlank() -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(R.string.album_detail_error, detailError), color = Color.White)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onRetryLoadMedia) {
-                        Text(stringResource(R.string.album_retry_load))
-                    }
-                }
-            }
-
             !localFile.exists() -> Text(
                 text = stringResource(R.string.album_media_missing),
                 color = Color.White,
@@ -596,6 +590,28 @@ private fun AlbumDetailPage(
                     },
                 onZoomedStateChanged = onZoomedStateChanged,
             )
+        }
+
+        if (isSelectedPage && !detailError.isNullOrBlank()) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.74f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp, vertical = 24.dp)
+                    .testTag(UiTestTags.ALBUM_DETAIL_ERROR_OVERLAY),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(stringResource(R.string.album_detail_error, detailError), color = Color.White)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = onRetryLoadMedia) {
+                        Text(stringResource(R.string.album_retry_load))
+                    }
+                }
+            }
         }
     }
 }
@@ -711,6 +727,14 @@ private fun ZoomableImage(
     modifier: Modifier = Modifier,
     onZoomedStateChanged: (Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
+    val imageRequest = remember(imageUri, context) {
+        ImageRequest.Builder(context)
+            .data(imageUri)
+            .crossfade(false)
+            .build()
+    }
+    val loadingPlaceholder = remember { ColorPainter(Color(0xFF2A2A2A)) }
     var scale by remember(imageUri) { mutableFloatStateOf(1f) }
     var offset by remember(imageUri) { mutableStateOf(Offset.Zero) }
     LaunchedEffect(imageUri) {
@@ -748,10 +772,12 @@ private fun ZoomableImage(
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
-            model = imageUri,
+            model = imageRequest,
             imageLoader = imageLoader,
             contentDescription = null,
             contentScale = ContentScale.Fit,
+            placeholder = loadingPlaceholder,
+            error = loadingPlaceholder,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer(
@@ -813,6 +839,31 @@ private fun MetadataLine(value: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+private fun prefetchNeighborImages(
+    page: Int,
+    navigationMediaList: List<AlbumMediaSummary>,
+    context: Context,
+    imageLoader: ImageLoader,
+) {
+    val neighborPages = intArrayOf(page - 1, page + 1)
+    neighborPages.forEach { neighborPage ->
+        val neighborSummary = navigationMediaList.getOrNull(neighborPage) ?: return@forEach
+        if (neighborSummary.savedMediaKind != OutputMediaKind.IMAGE) {
+            return@forEach
+        }
+        val localFile = File(context.filesDir, "internal_album/${neighborSummary.localRelativePath}")
+        if (!localFile.exists()) {
+            return@forEach
+        }
+        imageLoader.enqueue(
+            ImageRequest.Builder(context)
+                .data(localFile)
+                .crossfade(false)
+                .build(),
+        )
+    }
 }
 
 private fun buildVisibleMediaList(

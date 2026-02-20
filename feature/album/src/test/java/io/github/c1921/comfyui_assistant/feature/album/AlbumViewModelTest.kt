@@ -126,6 +126,42 @@ class AlbumViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `openMedia uses cache when revisiting a previous task`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val detailTaskA = detail(
+            taskId = "task-a",
+            mediaItems = listOf(mediaItem(index = 1, kind = OutputMediaKind.IMAGE)),
+        )
+        val detailTaskB = detail(
+            taskId = "task-b",
+            mediaItems = listOf(mediaItem(index = 1, kind = OutputMediaKind.IMAGE)),
+        )
+        val repository = FakeInternalAlbumRepository(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-a", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-b", index = 1, kind = OutputMediaKind.IMAGE),
+            ),
+            detailByTaskId = mapOf(
+                "task-a" to detailTaskA,
+                "task-b" to detailTaskB,
+            ),
+        )
+        val viewModel = AlbumViewModel(repository)
+
+        viewModel.openMedia(AlbumMediaKey("task-a", 1))
+        advanceUntilIdle()
+        viewModel.openMedia(AlbumMediaKey("task-b", 1))
+        advanceUntilIdle()
+        viewModel.openMedia(AlbumMediaKey("task-a", 1))
+        advanceUntilIdle()
+
+        assertEquals(1, repository.loadCountForTask("task-a"))
+        assertEquals(1, repository.loadCountForTask("task-b"))
+        Dispatchers.resetMain()
+    }
+
     private fun mediaSummary(
         taskId: String,
         index: Int,
@@ -197,6 +233,7 @@ class AlbumViewModelTest {
     ) : InternalAlbumRepository {
         private val taskSummariesFlow = MutableStateFlow<List<AlbumTaskSummary>>(emptyList())
         private val mediaSummariesFlow = MutableStateFlow(mediaList)
+        private val loadTaskDetailCallCountByTask = mutableMapOf<String, Int>()
         var loadTaskDetailCallCount: Int = 0
             private set
 
@@ -222,10 +259,13 @@ class AlbumViewModelTest {
 
         override suspend fun loadTaskDetail(taskId: String): Result<AlbumTaskDetail> {
             loadTaskDetailCallCount += 1
+            loadTaskDetailCallCountByTask[taskId] = (loadTaskDetailCallCountByTask[taskId] ?: 0) + 1
             val detail = detailByTaskId[taskId]
                 ?: return Result.failure(IllegalStateException("Task not found in fake repo"))
             return Result.success(detail)
         }
+
+        fun loadCountForTask(taskId: String): Int = loadTaskDetailCallCountByTask[taskId] ?: 0
 
         override suspend fun hasTask(taskId: String): Boolean = detailByTaskId.containsKey(taskId)
 

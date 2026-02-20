@@ -109,6 +109,58 @@ class AlbumScreenInstrumentedTest {
     }
 
     @Test
+    fun imageDetail_loadingState_showsImageWithoutLoadingOverlay() {
+        val localRelativePath = "tasks/task-loading-1/out_1.jpg"
+        prepareInternalAlbumFile(localRelativePath)
+        val state = AlbumUiState(
+            mediaList = listOf(mediaSummary(taskId = "task-loading-1", index = 1, kind = OutputMediaKind.IMAGE)),
+            selectedMediaKey = AlbumMediaKey("task-loading-1", 1),
+            isLoadingDetail = true,
+            isMetadataExpanded = false,
+        )
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = state,
+                imageLoader = imageLoader,
+                onOpenMedia = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_IMAGE).assertIsDisplayed()
+        composeRule.onAllNodesWithTag("album_detail_loading_overlay").assertCountEquals(0)
+    }
+
+    @Test
+    fun imageDetail_errorState_showsImageAndErrorOverlay() {
+        val localRelativePath = "tasks/task-error-1/out_1.jpg"
+        prepareInternalAlbumFile(localRelativePath)
+        val state = AlbumUiState(
+            mediaList = listOf(mediaSummary(taskId = "task-error-1", index = 1, kind = OutputMediaKind.IMAGE)),
+            selectedMediaKey = AlbumMediaKey("task-error-1", 1),
+            detailError = "forced error",
+            isMetadataExpanded = false,
+        )
+
+        composeRule.setContent {
+            AlbumScreen(
+                state = state,
+                imageLoader = imageLoader,
+                onOpenMedia = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {},
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_IMAGE).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_ERROR_OVERLAY).assertIsDisplayed()
+    }
+
+    @Test
     fun videoDetail_showsVideoPlayer() {
         val localRelativePath = "tasks/task-video-1/out_1.mp4"
         prepareInternalAlbumFile(localRelativePath)
@@ -199,6 +251,54 @@ class AlbumScreenInstrumentedTest {
         composeRule.runOnIdle {
             assertEquals(AlbumMediaKey("task-swipe", 1), openedKeys.last())
         }
+    }
+
+    @Test
+    fun detailPager_crossTaskSwipe_loadingStillShowsImage() {
+        val mediaAPath = "tasks/task-cross-a/out_2.jpg"
+        val mediaBPath = "tasks/task-cross-b/out_1.jpg"
+        prepareInternalAlbumFile(mediaAPath)
+        prepareInternalAlbumFile(mediaBPath)
+        val mediaAKey = AlbumMediaKey("task-cross-a", 2)
+        val mediaBKey = AlbumMediaKey("task-cross-b", 1)
+        val initialState = AlbumUiState(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-cross-b", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-cross-a", index = 2, kind = OutputMediaKind.IMAGE),
+            ),
+            selectedMediaKey = mediaAKey,
+            isMetadataExpanded = false,
+        )
+        val openedKeys = mutableListOf<AlbumMediaKey>()
+
+        composeRule.setContent {
+            var uiState by remember { mutableStateOf(initialState) }
+            AlbumScreen(
+                state = uiState,
+                imageLoader = imageLoader,
+                onOpenMedia = { key ->
+                    openedKeys += key
+                    uiState = uiState.copy(
+                        selectedMediaKey = key,
+                        selectedTaskDetail = null,
+                        selectedMediaItem = null,
+                        isLoadingDetail = true,
+                        detailError = null,
+                    )
+                },
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_IMAGE).performTouchInput { swipeLeft() }
+        composeRule.runOnIdle {
+            assertEquals(mediaBKey, openedKeys.last())
+        }
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_IMAGE).assertIsDisplayed()
     }
 
     @Test
