@@ -1,6 +1,10 @@
 package io.github.c1921.comfyui_assistant.feature.album
 
 import android.net.Uri
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -9,11 +13,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import io.github.c1921.comfyui_assistant.domain.AlbumDecodeOutcomeCode
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaItem
 import io.github.c1921.comfyui_assistant.domain.AlbumMediaKey
@@ -22,10 +26,10 @@ import io.github.c1921.comfyui_assistant.domain.AlbumTaskDetail
 import io.github.c1921.comfyui_assistant.domain.GenerationMode
 import io.github.c1921.comfyui_assistant.domain.OutputMediaKind
 import io.github.c1921.comfyui_assistant.ui.UiTestTags
+import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
-import org.junit.Assert.assertEquals
-import java.io.File
 
 class AlbumScreenInstrumentedTest {
     @get:Rule
@@ -53,11 +57,10 @@ class AlbumScreenInstrumentedTest {
 
         composeRule.onNodeWithTag(UiTestTags.ALBUM_MEDIA_GRID).assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.ALBUM_MEDIA_ITEM).assertCountEquals(2)
-        composeRule.onNodeWithTag(UiTestTags.ALBUM_VIDEO_BADGE).assertIsDisplayed()
     }
 
     @Test
-    fun imageDetail_supportsMetadataToggle() {
+    fun imageDetail_swipeUpShowsMetadataSheet() {
         val localRelativePath = "tasks/task-image-1/out_1.jpg"
         prepareInternalAlbumFile(localRelativePath)
         val mediaItem = mediaItem(
@@ -71,6 +74,7 @@ class AlbumScreenInstrumentedTest {
             mediaItems = listOf(mediaItem),
         )
         val state = AlbumUiState(
+            mediaList = listOf(mediaSummary(taskId = "task-image-1", index = 1, kind = OutputMediaKind.IMAGE)),
             selectedMediaKey = AlbumMediaKey("task-image-1", 1),
             selectedTaskDetail = detail,
             selectedMediaItem = mediaItem,
@@ -78,20 +82,23 @@ class AlbumScreenInstrumentedTest {
         )
 
         composeRule.setContent {
-            var isMetadataExpanded by remember { mutableStateOf(false) }
+            var uiState by remember { mutableStateOf(state) }
             AlbumScreen(
-                state = state.copy(isMetadataExpanded = isMetadataExpanded),
-                onOpenMedia = {},
+                state = uiState,
+                onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
                 onBackToList = {},
                 onRetryLoadMedia = {},
-                onToggleMetadataExpanded = { isMetadataExpanded = !isMetadataExpanded },
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
                 onSendImageToVideoInput = { _, _ -> },
             )
         }
 
         composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_IMAGE).assertIsDisplayed()
-        composeRule.onAllNodesWithText("taskId: task-image-1").assertCountEquals(0)
-        composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_TOGGLE).performClick()
+        composeRule.onAllNodesWithTag(UiTestTags.ALBUM_METADATA_SHEET).assertCountEquals(0)
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE).performTouchInput { swipeUp() }
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SHEET).assertIsDisplayed()
         composeRule.onNodeWithText("taskId: task-image-1").assertIsDisplayed()
     }
 
@@ -110,6 +117,7 @@ class AlbumScreenInstrumentedTest {
             mediaItems = listOf(mediaItem),
         )
         val state = AlbumUiState(
+            mediaList = listOf(mediaSummary(taskId = "task-video-1", index = 1, kind = OutputMediaKind.VIDEO)),
             selectedMediaKey = AlbumMediaKey("task-video-1", 1),
             selectedTaskDetail = detail,
             selectedMediaItem = mediaItem,
@@ -131,7 +139,111 @@ class AlbumScreenInstrumentedTest {
     }
 
     @Test
-    fun imageDetail_sendToVideoInputButton_isVisible_andInvokesCallback() {
+    fun detailPager_swipeLeft_opensNextMedia() {
+        val media1Path = "tasks/task-swipe/out_1.jpg"
+        val media2Path = "tasks/task-swipe/out_2.jpg"
+        prepareInternalAlbumFile(media1Path)
+        prepareInternalAlbumFile(media2Path)
+        val item1 = mediaItem(
+            taskId = "task-swipe",
+            index = 1,
+            kind = OutputMediaKind.IMAGE,
+            localRelativePath = media1Path,
+        )
+        val item2 = mediaItem(
+            taskId = "task-swipe",
+            index = 2,
+            kind = OutputMediaKind.IMAGE,
+            localRelativePath = media2Path,
+        )
+        val detail = taskDetail(taskId = "task-swipe", mediaItems = listOf(item1, item2))
+        val initialState = AlbumUiState(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-swipe", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-swipe", index = 2, kind = OutputMediaKind.IMAGE),
+            ),
+            selectedMediaKey = AlbumMediaKey("task-swipe", 2),
+            selectedTaskDetail = detail,
+            selectedMediaItem = item2,
+            isMetadataExpanded = false,
+        )
+        val openedKeys = mutableListOf<AlbumMediaKey>()
+
+        composeRule.setContent {
+            var uiState by remember { mutableStateOf(initialState) }
+            AlbumScreen(
+                state = uiState,
+                onOpenMedia = { key ->
+                    openedKeys += key
+                    uiState = uiState.copy(
+                        selectedMediaKey = key,
+                        selectedMediaItem = if (key.index == 1) item1 else item2,
+                    )
+                },
+                onBackToList = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_IMAGE).performTouchInput { swipeLeft() }
+        composeRule.runOnIdle {
+            assertEquals(AlbumMediaKey("task-swipe", 1), openedKeys.last())
+        }
+    }
+
+    @Test
+    fun detailPager_onFirstPage_swipeRight_stopsAtBoundary() {
+        val media1Path = "tasks/task-edge/out_1.jpg"
+        val media2Path = "tasks/task-edge/out_2.jpg"
+        prepareInternalAlbumFile(media1Path)
+        prepareInternalAlbumFile(media2Path)
+        val item2 = mediaItem(
+            taskId = "task-edge",
+            index = 2,
+            kind = OutputMediaKind.IMAGE,
+            localRelativePath = media2Path,
+        )
+        val initialState = AlbumUiState(
+            mediaList = listOf(
+                mediaSummary(taskId = "task-edge", index = 1, kind = OutputMediaKind.IMAGE),
+                mediaSummary(taskId = "task-edge", index = 2, kind = OutputMediaKind.IMAGE),
+            ),
+            selectedMediaKey = AlbumMediaKey("task-edge", 2),
+            selectedTaskDetail = taskDetail(taskId = "task-edge", mediaItems = listOf(item2)),
+            selectedMediaItem = item2,
+            isMetadataExpanded = false,
+        )
+        var openCalls = 0
+
+        composeRule.setContent {
+            var uiState by remember { mutableStateOf(initialState) }
+            AlbumScreen(
+                state = uiState,
+                onOpenMedia = { key ->
+                    openCalls += 1
+                    uiState = uiState.copy(selectedMediaKey = key)
+                },
+                onBackToList = {},
+                onRetryLoadMedia = {},
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
+                onSendImageToVideoInput = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_DETAIL_PAGER).performTouchInput { swipeRight() }
+        composeRule.runOnIdle {
+            assertEquals(0, openCalls)
+        }
+    }
+
+    @Test
+    fun imageDetail_sendToVideoInputButton_isVisibleInMetadataSheet_andInvokesCallback() {
         val localRelativePath = "tasks/task-send-1/out_1.jpg"
         val localFile = prepareInternalAlbumFile(localRelativePath)
         val mediaItem = mediaItem(
@@ -145,6 +257,7 @@ class AlbumScreenInstrumentedTest {
             mediaItems = listOf(mediaItem),
         )
         val state = AlbumUiState(
+            mediaList = listOf(mediaSummary(taskId = "task-send-1", index = 1, kind = OutputMediaKind.IMAGE)),
             selectedMediaKey = AlbumMediaKey("task-send-1", 1),
             selectedTaskDetail = detail,
             selectedMediaItem = mediaItem,
@@ -154,12 +267,15 @@ class AlbumScreenInstrumentedTest {
         var sentDisplayName: String? = null
 
         composeRule.setContent {
+            var uiState by remember { mutableStateOf(state) }
             AlbumScreen(
-                state = state,
-                onOpenMedia = {},
+                state = uiState,
+                onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
                 onBackToList = {},
                 onRetryLoadMedia = {},
-                onToggleMetadataExpanded = {},
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
                 onSendImageToVideoInput = { uri, displayName ->
                     sentUri = uri
                     sentDisplayName = displayName
@@ -167,6 +283,7 @@ class AlbumScreenInstrumentedTest {
             )
         }
 
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE).performTouchInput { swipeUp() }
         composeRule.onNodeWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).performClick()
         composeRule.runOnIdle {
@@ -176,7 +293,7 @@ class AlbumScreenInstrumentedTest {
     }
 
     @Test
-    fun videoDetail_sendToVideoInputButton_isHidden() {
+    fun videoDetail_sendToVideoInputButton_isHiddenInMetadataSheet() {
         val localRelativePath = "tasks/task-send-video-1/out_1.mp4"
         prepareInternalAlbumFile(localRelativePath)
         val mediaItem = mediaItem(
@@ -190,6 +307,7 @@ class AlbumScreenInstrumentedTest {
             mediaItems = listOf(mediaItem),
         )
         val state = AlbumUiState(
+            mediaList = listOf(mediaSummary(taskId = "task-send-video-1", index = 1, kind = OutputMediaKind.VIDEO)),
             selectedMediaKey = AlbumMediaKey("task-send-video-1", 1),
             selectedTaskDetail = detail,
             selectedMediaItem = mediaItem,
@@ -197,16 +315,20 @@ class AlbumScreenInstrumentedTest {
         )
 
         composeRule.setContent {
+            var uiState by remember { mutableStateOf(state) }
             AlbumScreen(
-                state = state,
-                onOpenMedia = {},
+                state = uiState,
+                onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
                 onBackToList = {},
                 onRetryLoadMedia = {},
-                onToggleMetadataExpanded = {},
+                onToggleMetadataExpanded = {
+                    uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
+                },
                 onSendImageToVideoInput = { _, _ -> },
             )
         }
 
+        composeRule.onNodeWithTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE).performTouchInput { swipeUp() }
         composeRule.onAllNodesWithTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON).assertCountEquals(0)
     }
 

@@ -6,11 +6,12 @@ import android.net.Uri
 import android.util.Size
 import android.widget.MediaController
 import android.widget.VideoView
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,27 +30,33 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +84,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.max
 
 private enum class AlbumMediaFilter {
@@ -336,6 +345,7 @@ private fun AlbumMediaGridContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun AlbumMediaDetailContent(
     state: AlbumUiState,
@@ -347,161 +357,338 @@ private fun AlbumMediaDetailContent(
     onSendImageToVideoInput: (Uri, String) -> Unit,
 ) {
     val context = LocalContext.current
-    val selectedMedia = state.selectedMediaItem
-    val localFile = remember(selectedMedia?.localRelativePath, context.filesDir) {
-        selectedMedia?.let { File(context.filesDir, "internal_album/${it.localRelativePath}") }
-    }
-    val sendableImageFile = localFile?.takeIf {
-        selectedMedia?.savedMediaKind == OutputMediaKind.IMAGE && it.exists()
-    }
     val selectedKey = state.selectedMediaKey
     val currentPosition = remember(navigationMediaList, selectedKey) {
         navigationMediaList.indexOfFirst { it.key == selectedKey }
     }
-    val previousKey = remember(navigationMediaList, currentPosition) {
-        if (currentPosition > 0) {
-            navigationMediaList[currentPosition - 1].key
-        } else {
-            null
+    val selectedPage = if (currentPosition >= 0) currentPosition else 0
+    val pagerState = rememberPagerState(
+        initialPage = selectedPage,
+        pageCount = { navigationMediaList.size },
+    )
+    val latestSelectedKey by rememberUpdatedState(selectedKey)
+    var isCurrentImageZoomed by remember(selectedKey) { mutableStateOf(false) }
+
+    LaunchedEffect(selectedPage, navigationMediaList.size) {
+        if (navigationMediaList.isEmpty()) {
+            return@LaunchedEffect
         }
-    }
-    val nextKey = remember(navigationMediaList, currentPosition) {
-        if (currentPosition in 0 until navigationMediaList.lastIndex) {
-            navigationMediaList[currentPosition + 1].key
-        } else {
-            null
+        if (selectedPage in 0 until pagerState.pageCount && pagerState.currentPage != selectedPage) {
+            pagerState.scrollToPage(selectedPage)
         }
     }
 
-    Column(
+    LaunchedEffect(pagerState, navigationMediaList) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                val key = navigationMediaList.getOrNull(page)?.key ?: return@collect
+                if (key != latestSelectedKey) {
+                    onOpenMedia(key)
+                }
+            }
+    }
+
+    LaunchedEffect(pagerState.currentPage, navigationMediaList) {
+        val currentMedia = navigationMediaList.getOrNull(pagerState.currentPage)
+        if (currentMedia?.savedMediaKind != OutputMediaKind.IMAGE) {
+            isCurrentImageZoomed = false
+        }
+    }
+
+    val currentSummary = navigationMediaList.getOrNull(pagerState.currentPage)
+    val currentFile = remember(currentSummary?.localRelativePath, context.filesDir) {
+        currentSummary?.let { File(context.filesDir, "internal_album/${it.localRelativePath}") }
+    }
+    val sendableImageFile = currentFile?.takeIf {
+        currentSummary?.savedMediaKind == OutputMediaKind.IMAGE && it.exists()
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .background(Color.Black),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(onClick = onBackToList) {
-                Text(stringResource(R.string.album_back_to_list))
+        if (navigationMediaList.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(stringResource(R.string.album_media_missing), color = Color.White)
             }
-            if (currentPosition >= 0 && navigationMediaList.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = stringResource(
-                        R.string.album_detail_position,
-                        currentPosition + 1,
-                        navigationMediaList.size,
-                    ),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else {
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = !isCurrentImageZoomed,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(UiTestTags.ALBUM_DETAIL_PAGER),
+            ) { page ->
+                val summary = navigationMediaList[page]
+                val localFile = remember(summary.localRelativePath, context.filesDir) {
+                    File(context.filesDir, "internal_album/${summary.localRelativePath}")
+                }
+                AlbumDetailPage(
+                    summary = summary,
+                    localFile = localFile,
+                    selectedKey = selectedKey,
+                    isLoadingDetail = state.isLoadingDetail,
+                    detailError = state.detailError,
+                    onRetryLoadMedia = onRetryLoadMedia,
+                    onZoomedStateChanged = if (page == pagerState.currentPage) {
+                        { isZoomed -> isCurrentImageZoomed = isZoomed }
+                    } else {
+                        {}
+                    },
                 )
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopStart)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilledTonalButton(
-                onClick = { previousKey?.let(onOpenMedia) },
-                enabled = previousKey != null,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.album_prev))
-            }
-            FilledTonalButton(
-                onClick = { nextKey?.let(onOpenMedia) },
-                enabled = nextKey != null,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.album_next))
-            }
-            if (sendableImageFile != null) {
-                Button(
-                    onClick = {
-                        onSendImageToVideoInput(Uri.fromFile(sendableImageFile), sendableImageFile.name)
-                    },
-                    modifier = Modifier
-                        .weight(1.35f)
-                        .testTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON),
-                ) {
-                    Text(stringResource(R.string.album_send_to_video_input))
-                }
+            Button(onClick = onBackToList) {
+                Text(stringResource(R.string.album_back_to_list))
             }
         }
 
-        Card(
+        Box(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            ),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    state.isLoadingDetail -> CircularProgressIndicator()
-                    !state.detailError.isNullOrBlank() -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(stringResource(R.string.album_detail_error, state.detailError))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(onClick = onRetryLoadMedia) {
-                                Text(stringResource(R.string.album_retry_load))
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag(UiTestTags.ALBUM_METADATA_SWIPE_ZONE)
+                .pointerInput(state.isMetadataExpanded) {
+                    var dragTotal = 0f
+                    var opened = false
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            dragTotal = 0f
+                            opened = false
+                        },
+                        onDragCancel = {
+                            dragTotal = 0f
+                            opened = false
+                        },
+                        onVerticalDrag = { _, dragAmount ->
+                            if (state.isMetadataExpanded || opened) {
+                                return@detectVerticalDragGestures
                             }
-                        }
-                    }
+                            dragTotal += dragAmount
+                            if (dragTotal <= -56f) {
+                                opened = true
+                                onToggleMetadataExpanded()
+                            }
+                        },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!state.isMetadataExpanded) {
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.7f)),
+                )
+            }
+        }
 
-                    selectedMedia == null || localFile == null || !localFile.exists() -> {
-                        Text(stringResource(R.string.album_media_missing))
-                    }
+        if (state.isMetadataExpanded) {
+            ModalBottomSheet(
+                onDismissRequest = onToggleMetadataExpanded,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.ALBUM_METADATA_SHEET),
+            ) {
+                MetadataSheetContent(
+                    detail = state.selectedTaskDetail,
+                    selectedMedia = state.selectedMediaItem,
+                    sendableImageFile = sendableImageFile,
+                    onSendImageToVideoInput = onSendImageToVideoInput,
+                )
+            }
+        }
+    }
+}
 
-                    selectedMedia.savedMediaKind == OutputMediaKind.VIDEO -> {
-                        key(localFile.absolutePath) {
-                            AndroidView(
-                                factory = { viewContext ->
-                                    VideoView(viewContext).apply {
-                                        val mediaController = MediaController(viewContext)
-                                        mediaController.setAnchorView(this)
-                                        setMediaController(mediaController)
-                                        setVideoURI(Uri.fromFile(localFile))
-                                        setOnPreparedListener { player ->
-                                            player.isLooping = true
-                                            start()
-                                        }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .testTag(UiTestTags.ALBUM_DETAIL_VIDEO),
-                            )
-                        }
-                    }
+@Composable
+private fun AlbumDetailPage(
+    summary: AlbumMediaSummary,
+    localFile: File,
+    selectedKey: AlbumMediaKey?,
+    isLoadingDetail: Boolean,
+    detailError: String?,
+    onRetryLoadMedia: () -> Unit,
+    onZoomedStateChanged: (Boolean) -> Unit,
+) {
+    val isSelectedPage = summary.key == selectedKey
 
-                    else -> ZoomableImage(
-                        imageUri = Uri.fromFile(localFile),
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            isSelectedPage && isLoadingDetail -> CircularProgressIndicator()
+
+            isSelectedPage && !detailError.isNullOrBlank() -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.album_detail_error, detailError), color = Color.White)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = onRetryLoadMedia) {
+                        Text(stringResource(R.string.album_retry_load))
+                    }
+                }
+            }
+
+            !localFile.exists() -> Text(
+                text = stringResource(R.string.album_media_missing),
+                color = Color.White,
+            )
+
+            summary.savedMediaKind == OutputMediaKind.VIDEO -> {
+                key(localFile.absolutePath) {
+                    AndroidView(
+                        factory = { viewContext ->
+                            VideoView(viewContext).apply {
+                                val mediaController = MediaController(viewContext)
+                                mediaController.setAnchorView(this)
+                                setMediaController(mediaController)
+                                setVideoURI(Uri.fromFile(localFile))
+                                setOnPreparedListener { player ->
+                                    player.isLooping = true
+                                    start()
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxSize()
-                            .testTag(UiTestTags.ALBUM_DETAIL_IMAGE),
+                            .let { base ->
+                                if (isSelectedPage) base.testTag(UiTestTags.ALBUM_DETAIL_VIDEO) else base
+                            },
                     )
                 }
             }
+
+            else -> ZoomableImage(
+                imageUri = Uri.fromFile(localFile),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .let { base ->
+                        if (isSelectedPage) base.testTag(UiTestTags.ALBUM_DETAIL_IMAGE) else base
+                    },
+                onZoomedStateChanged = onZoomedStateChanged,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetadataSheetContent(
+    detail: AlbumTaskDetail?,
+    selectedMedia: AlbumMediaItem?,
+    sendableImageFile: File?,
+    onSendImageToVideoInput: (Uri, String) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.ALBUM_METADATA_PANEL)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.album_metadata_title),
+            style = MaterialTheme.typography.titleSmall,
+        )
+
+        if (sendableImageFile != null) {
+            Button(
+                onClick = {
+                    onSendImageToVideoInput(Uri.fromFile(sendableImageFile), sendableImageFile.name)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.ALBUM_SEND_TO_VIDEO_INPUT_BUTTON),
+            ) {
+                Text(stringResource(R.string.album_send_to_video_input))
+            }
         }
 
-        MetadataPanel(
-            detail = state.selectedTaskDetail,
-            selectedMedia = selectedMedia,
-            isExpanded = state.isMetadataExpanded,
-            onToggle = onToggleMetadataExpanded,
-        )
+        if (detail == null || selectedMedia == null) {
+            Text(
+                text = stringResource(R.string.album_metadata_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            return@Column
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            MetadataLine(stringResource(R.string.album_task_id_value, detail.taskId))
+            MetadataLine(stringResource(R.string.album_request_time_value, formatTimestamp(detail.requestSentAtEpochMs)))
+            MetadataLine(stringResource(R.string.album_counts_value, detail.savedCount, detail.totalOutputs, detail.failedCount))
+            MetadataLine(stringResource(R.string.album_mode_value, detail.generationMode.name))
+            MetadataLine(stringResource(R.string.album_workflow_id_value, detail.workflowId))
+            MetadataLine(stringResource(R.string.album_prompt_value, detail.prompt))
+            MetadataLine(stringResource(R.string.album_negative_value, detail.negative))
+            detail.videoLengthFrames?.let {
+                MetadataLine(stringResource(R.string.album_video_frames_value, it))
+            }
+            detail.uploadedImageFileName?.let {
+                MetadataLine(stringResource(R.string.album_uploaded_file_value, it))
+            }
+            detail.promptTipsNodeErrors?.let {
+                MetadataLine(stringResource(R.string.album_prompt_tips_value, it))
+            }
+            MetadataLine(stringResource(R.string.album_saved_time_value, formatTimestamp(detail.savedAtEpochMs)))
+            MetadataLine(stringResource(R.string.album_media_path_value, selectedMedia.localRelativePath))
+            MetadataLine(stringResource(R.string.album_media_type_value, selectedMedia.savedMediaKind.name))
+            MetadataLine(stringResource(R.string.album_media_decode_value, selectedMedia.decodeOutcomeCode.name))
+            MetadataLine(stringResource(R.string.album_media_size_value, selectedMedia.fileSizeBytes))
+            MetadataLine(stringResource(R.string.album_media_source_url_value, selectedMedia.sourceFileUrl))
+            MetadataLine(stringResource(R.string.album_media_source_type_value, selectedMedia.sourceFileType))
+            MetadataLine(stringResource(R.string.album_media_source_node_value, selectedMedia.sourceNodeId ?: "-"))
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+            Text(
+                text = stringResource(R.string.album_failures_title),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            if (detail.failures.isEmpty()) {
+                MetadataLine("-")
+            } else {
+                detail.failures.forEach { failure ->
+                    MetadataLine("#${failure.index} ${failure.reason}")
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+            Text(
+                text = stringResource(R.string.album_node_info_title),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            if (detail.nodeInfoList.isEmpty()) {
+                MetadataLine("-")
+            } else {
+                detail.nodeInfoList.forEach { node ->
+                    MetadataLine("${node.nodeId}.${node.fieldName}=${node.fieldValue}")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -509,12 +696,15 @@ private fun AlbumMediaDetailContent(
 private fun ZoomableImage(
     imageUri: Uri,
     modifier: Modifier = Modifier,
+    onZoomedStateChanged: (Boolean) -> Unit,
 ) {
     var scale by remember(imageUri) { mutableFloatStateOf(1f) }
     var offset by remember(imageUri) { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(imageUri) {
+        onZoomedStateChanged(false)
+    }
     Box(
         modifier = modifier
-            .clip(MaterialTheme.shapes.medium)
             .pointerInput(imageUri) {
                 detectTapGestures(
                     onDoubleTap = {
@@ -524,14 +714,22 @@ private fun ZoomableImage(
                         } else {
                             scale = 2f
                         }
+                        onZoomedStateChanged(scale > 1f)
                     },
                 )
             }
-            .pointerInput(imageUri) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    val nextScale = (scale * zoom).coerceIn(1f, 4f)
-                    scale = nextScale
-                    offset = if (nextScale > 1f) offset + pan else Offset.Zero
+            .let { base ->
+                if (scale > 1f) {
+                    base.pointerInput(imageUri) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            val nextScale = (scale * zoom).coerceIn(1f, 4f)
+                            scale = nextScale
+                            offset = if (nextScale > 1f) offset + pan else Offset.Zero
+                            onZoomedStateChanged(nextScale > 1f)
+                        }
+                    }
+                } else {
+                    base
                 }
             },
         contentAlignment = Alignment.Center,
@@ -539,6 +737,7 @@ private fun ZoomableImage(
         AsyncImage(
             model = imageUri,
             contentDescription = null,
+            contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer(
@@ -594,116 +793,6 @@ private fun VideoThumbnail(
                 color = Color.White,
                 style = MaterialTheme.typography.labelSmall,
             )
-        }
-    }
-}
-
-@Composable
-private fun MetadataPanel(
-    detail: AlbumTaskDetail?,
-    selectedMedia: AlbumMediaItem?,
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(UiTestTags.ALBUM_METADATA_PANEL),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.album_metadata_title),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                FilledTonalButton(
-                    onClick = onToggle,
-                    modifier = Modifier.testTag(UiTestTags.ALBUM_METADATA_TOGGLE),
-                ) {
-                    Text(
-                        stringResource(
-                            if (isExpanded) R.string.album_metadata_hide else R.string.album_metadata_show,
-                        ),
-                    )
-                }
-            }
-
-            if (detail == null || selectedMedia == null) {
-                Text(
-                    text = stringResource(R.string.album_metadata_unavailable),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                return@Column
-            }
-
-            AnimatedVisibility(visible = isExpanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 260.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    MetadataLine(stringResource(R.string.album_task_id_value, detail.taskId))
-                    MetadataLine(stringResource(R.string.album_request_time_value, formatTimestamp(detail.requestSentAtEpochMs)))
-                    MetadataLine(stringResource(R.string.album_counts_value, detail.savedCount, detail.totalOutputs, detail.failedCount))
-                    MetadataLine(stringResource(R.string.album_mode_value, detail.generationMode.name))
-                    MetadataLine(stringResource(R.string.album_workflow_id_value, detail.workflowId))
-                    MetadataLine(stringResource(R.string.album_prompt_value, detail.prompt))
-                    MetadataLine(stringResource(R.string.album_negative_value, detail.negative))
-                    detail.videoLengthFrames?.let {
-                        MetadataLine(stringResource(R.string.album_video_frames_value, it))
-                    }
-                    detail.uploadedImageFileName?.let {
-                        MetadataLine(stringResource(R.string.album_uploaded_file_value, it))
-                    }
-                    detail.promptTipsNodeErrors?.let {
-                        MetadataLine(stringResource(R.string.album_prompt_tips_value, it))
-                    }
-                    MetadataLine(stringResource(R.string.album_saved_time_value, formatTimestamp(detail.savedAtEpochMs)))
-                    MetadataLine(stringResource(R.string.album_media_path_value, selectedMedia.localRelativePath))
-                    MetadataLine(stringResource(R.string.album_media_type_value, selectedMedia.savedMediaKind.name))
-                    MetadataLine(stringResource(R.string.album_media_decode_value, selectedMedia.decodeOutcomeCode.name))
-                    MetadataLine(stringResource(R.string.album_media_size_value, selectedMedia.fileSizeBytes))
-                    MetadataLine(stringResource(R.string.album_media_source_url_value, selectedMedia.sourceFileUrl))
-                    MetadataLine(stringResource(R.string.album_media_source_type_value, selectedMedia.sourceFileType))
-                    MetadataLine(stringResource(R.string.album_media_source_node_value, selectedMedia.sourceNodeId ?: "-"))
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-                    Text(
-                        text = stringResource(R.string.album_failures_title),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    if (detail.failures.isEmpty()) {
-                        MetadataLine("-")
-                    } else {
-                        detail.failures.forEach { failure ->
-                            MetadataLine("#${failure.index} ${failure.reason}")
-                        }
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-                    Text(
-                        text = stringResource(R.string.album_node_info_title),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    if (detail.nodeInfoList.isEmpty()) {
-                        MetadataLine("-")
-                    } else {
-                        detail.nodeInfoList.forEach { node ->
-                            MetadataLine("${node.nodeId}.${node.fieldName}=${node.fieldValue}")
-                        }
-                    }
-                }
-            }
         }
     }
 }
