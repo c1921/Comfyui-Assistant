@@ -8,7 +8,6 @@
     <string name="album_sort_newest">Newest first</string>
     <string name="album_sort_oldest">Oldest first</string>
     <string name="album_video_badge">VIDEO</string>
-    <string name="album_back_to_list">Back to list</string>
     <string name="album_retry_load">Retry</string>
     <string name="album_detail_error">Failed to load task: %1$s</string>
     <string name="album_media_missing">Local file is missing.</string>

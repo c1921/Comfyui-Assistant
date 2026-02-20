@@ -1,6 +1,7 @@
 package io.github.c1921.comfyui_assistant.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -88,6 +89,7 @@ fun MainScreen(
     settingsMessages: Flow<String>,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val isAlbumDetailMode = selectedTab == MainTab.Album && albumState.selectedMediaKey != null
 
     LaunchedEffect(generateMessages, albumMessages, settingsMessages) {
         merge(generateMessages, albumMessages, settingsMessages).collectLatest { message ->
@@ -95,8 +97,20 @@ fun MainScreen(
         }
     }
 
+    BackHandler(enabled = isAlbumDetailMode) {
+        if (albumState.isMetadataExpanded) {
+            onToggleAlbumMetadataExpanded()
+        } else {
+            onBackFromAlbumDetail()
+        }
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_title)) }) },
+        topBar = {
+            if (!isAlbumDetailMode) {
+                TopAppBar(title = { Text(stringResource(R.string.app_title)) })
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         Column(
@@ -104,23 +118,25 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            TabRow(selectedTabIndex = selectedTab.ordinal) {
-                Tab(
-                    selected = selectedTab == MainTab.Generate,
-                    onClick = { onSelectTab(MainTab.Generate) },
-                    text = { Text(stringResource(R.string.tab_generate)) },
-                )
-                Tab(
-                    selected = selectedTab == MainTab.Album,
-                    onClick = { onSelectTab(MainTab.Album) },
-                    modifier = Modifier.testTag(UiTestTags.TAB_ALBUM),
-                    text = { Text(stringResource(R.string.tab_album)) },
-                )
-                Tab(
-                    selected = selectedTab == MainTab.Settings,
-                    onClick = { onSelectTab(MainTab.Settings) },
-                    text = { Text(stringResource(R.string.tab_settings)) },
-                )
+            if (!isAlbumDetailMode) {
+                TabRow(selectedTabIndex = selectedTab.ordinal) {
+                    Tab(
+                        selected = selectedTab == MainTab.Generate,
+                        onClick = { onSelectTab(MainTab.Generate) },
+                        text = { Text(stringResource(R.string.tab_generate)) },
+                    )
+                    Tab(
+                        selected = selectedTab == MainTab.Album,
+                        onClick = { onSelectTab(MainTab.Album) },
+                        modifier = Modifier.testTag(UiTestTags.TAB_ALBUM),
+                        text = { Text(stringResource(R.string.tab_album)) },
+                    )
+                    Tab(
+                        selected = selectedTab == MainTab.Settings,
+                        onClick = { onSelectTab(MainTab.Settings) },
+                        text = { Text(stringResource(R.string.tab_settings)) },
+                    )
+                }
             }
 
             when (selectedTab) {
@@ -145,7 +161,6 @@ fun MainScreen(
                     state = albumState,
                     imageLoader = imageLoader,
                     onOpenMedia = onOpenAlbumMedia,
-                    onBackToList = onBackFromAlbumDetail,
                     onRetryLoadMedia = onRetryLoadAlbumMedia,
                     onToggleMetadataExpanded = onToggleAlbumMetadataExpanded,
                     onSendImageToVideoInput = onSendAlbumImageToVideoInput,

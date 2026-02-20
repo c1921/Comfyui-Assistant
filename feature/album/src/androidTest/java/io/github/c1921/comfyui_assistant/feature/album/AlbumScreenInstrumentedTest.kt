@@ -55,7 +55,6 @@ class AlbumScreenInstrumentedTest {
                 state = state,
                 imageLoader = imageLoader,
                 onOpenMedia = {},
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },
@@ -94,7 +93,6 @@ class AlbumScreenInstrumentedTest {
                 state = uiState,
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -137,7 +135,6 @@ class AlbumScreenInstrumentedTest {
                 state = state,
                 imageLoader = imageLoader,
                 onOpenMedia = {},
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },
@@ -190,7 +187,6 @@ class AlbumScreenInstrumentedTest {
                         selectedMediaItem = if (key.index == 1) item1 else item2,
                     )
                 },
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -238,7 +234,6 @@ class AlbumScreenInstrumentedTest {
                     openCalls += 1
                     uiState = uiState.copy(selectedMediaKey = key)
                 },
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -283,7 +278,6 @@ class AlbumScreenInstrumentedTest {
                 state = uiState,
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -332,7 +326,6 @@ class AlbumScreenInstrumentedTest {
                 state = uiState,
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> uiState = uiState.copy(selectedMediaKey = key) },
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {
                     uiState = uiState.copy(isMetadataExpanded = !uiState.isMetadataExpanded)
@@ -358,7 +351,6 @@ class AlbumScreenInstrumentedTest {
                 state = AlbumUiState(mediaList = mediaList),
                 imageLoader = imageLoader,
                 onOpenMedia = { key -> openedKey = key },
-                onBackToList = {},
                 onRetryLoadMedia = {},
                 onToggleMetadataExpanded = {},
                 onSendImageToVideoInput = { _, _ -> },

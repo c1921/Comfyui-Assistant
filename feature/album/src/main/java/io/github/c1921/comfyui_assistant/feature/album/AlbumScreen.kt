@@ -108,7 +108,6 @@ fun AlbumScreen(
     state: AlbumUiState,
     imageLoader: ImageLoader,
     onOpenMedia: (AlbumMediaKey) -> Unit,
-    onBackToList: () -> Unit,
     onRetryLoadMedia: () -> Unit,
     onToggleMetadataExpanded: () -> Unit,
     onSendImageToVideoInput: (Uri, String) -> Unit,
@@ -177,7 +176,6 @@ fun AlbumScreen(
         imageLoader = imageLoader,
         navigationMediaList = navigationMediaList,
         onOpenMedia = onOpenMedia,
-        onBackToList = onBackToList,
         onRetryLoadMedia = onRetryLoadMedia,
         onToggleMetadataExpanded = onToggleMetadataExpanded,
         onSendImageToVideoInput = onSendImageToVideoInput,
@@ -375,7 +373,6 @@ private fun AlbumMediaDetailContent(
     imageLoader: ImageLoader,
     navigationMediaList: List<AlbumMediaSummary>,
     onOpenMedia: (AlbumMediaKey) -> Unit,
-    onBackToList: () -> Unit,
     onRetryLoadMedia: () -> Unit,
     onToggleMetadataExpanded: () -> Unit,
     onSendImageToVideoInput: (Uri, String) -> Unit,
@@ -466,18 +463,6 @@ private fun AlbumMediaDetailContent(
                         {}
                     },
                 )
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopStart)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(onClick = onBackToList) {
-                Text(stringResource(R.string.album_back_to_list))
             }
         }
 
